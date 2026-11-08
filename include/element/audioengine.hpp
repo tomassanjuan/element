@@ -50,9 +50,21 @@ public:
     bool addGraph (RootGraph* graph);
     bool removeGraph (RootGraph* graph);
 
-    void setCurrentGraph (const int index) { setActiveGraph (index); }
-    void setActiveGraph (const int index);
-    int getActiveGraph() const;
+    /** Moves a root graph to a new position in the render order.
+
+        Engine indexes of all graphs are updated and the active graph stays
+        active. This is not an active graph change, so no crossfade or async
+        notification is triggered.
+
+        @param from The current engine index of the graph to move.
+        @param to   The engine index the graph should be moved to.
+        @return true if the graph was moved, false if either index was out of
+                range or the indexes were equal.
+    */
+    bool moveGraph (const int from, const int to);
+
+    void setActiveGraphIndex (const int index);
+    int getActiveGraphIndex() const;
 
     RootGraph* getGraph (const int index);
 
@@ -63,10 +75,38 @@ public:
 
     void togglePlayPause();
 
+    /** Performs a transport bar action, see Transport::requestAction().
+
+        When hosted as a plugin the host playhead re-applies its own play and
+        record state every block, so the action is overridden there exactly as
+        the on-screen buttons are.
+
+        @param action The action to perform
+    */
+    void performTransportAction (TransportAction action);
+
     juce::MidiKeyboardState& getKeyboardState();
     Transport::MonitorPtr getTransportMonitor() const;
     juce::AudioIODeviceCallback& getAudioIODeviceCallback();
     juce::MidiInputCallback& getMidiInputCallback();
+
+    /** Returns the total number of audio IO callbacks processed so far.
+
+        Increments once per audio block while the device is running. Poll it
+        from a timer to detect a device whose callbacks have silently stopped.
+
+        @return the number of audio IO callbacks processed
+    */
+    uint64_t ioCallbackTicks() const;
+
+    /** Returns and clears the last device error reported by the audio device.
+
+        Errors are reported by some backends (e.g. CoreAudio) when a device
+        fails mid-stream. Safe to call from the message thread.
+
+        @return the last error message, or an empty string if none occurred
+    */
+    juce::String lastDeviceErrorMessage();
 
     /** For use by external systems only! e.g. the AU/VST version of Element and
         possibly things like rendering in the future
@@ -75,6 +115,16 @@ public:
     void processExternalBuffers (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi);
     void processExternalPlayhead (juce::AudioPlayHead* playhead, const int nframes);
     void releaseExternalResources();
+
+    /** Sets the audio workgroup that render worker threads should join.
+
+        For external systems that are handed a workgroup by their host. Safe to
+        call from the audio thread. Has no effect on platforms without workgroups.
+
+        @param workgroup the workgroup provided by the host
+    */
+    void setAudioWorkgroup (const juce::AudioWorkgroup& workgroup);
+
     void updateExternalLatencySamples();
     int getExternalLatencySamples() const;
 

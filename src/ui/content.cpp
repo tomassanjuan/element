@@ -7,10 +7,13 @@
 #include <element/devices.hpp>
 #include <element/node.hpp>
 #include <element/plugins.hpp>
+#include <element/ui.hpp>
 #include <element/ui/commands.hpp>
 #include <element/ui/content.hpp>
+#include <element/ui/preferences.hpp>
 #include <element/ui/style.hpp>
 
+#include "services/deviceservice.hpp"
 #include "services/mappingservice.hpp"
 #include "services/sessionservice.hpp"
 #include "ui/midiblinker.hpp"
@@ -64,11 +67,11 @@ public:
         addAndMakeVisible (tempoBar);
         addAndMakeVisible (transport);
 
-        mapButton.setButtonText (TRANS ("map"));
-        mapButton.setColour (SettingButton::backgroundOnColourId, Colors::toggleBlue);
-        mapButton.addListener (this);
-        addAndMakeVisible (mapButton);
-        mapButton.setVisible (false);
+        learnButton.setButtonText (TRANS ("learn"));
+        learnButton.setColour (SettingButton::backgroundOnColourId, Colors::toggleBlue);
+        learnButton.addListener (this);
+        addAndMakeVisible (learnButton);
+        learnButton.setVisible (false);
 
         pluginMenu.setIcon (Icon (getIcons().falBarsOutline,
                                   findColour (TextButton::textColourOffId)));
@@ -108,10 +111,8 @@ public:
         if (midiIOMonitor == nullptr)
         {
             midiIOMonitor = engine->getMidiIOMonitor();
-            connections.add (midiIOMonitor->sigSent.connect (
-                std::bind (&MidiBlinker::triggerSent, &midiBlinker)));
-            connections.add (midiIOMonitor->sigReceived.connect (
-                std::bind (&MidiBlinker::triggerReceived, &midiBlinker)));
+            connections.add (midiIOMonitor->sigSent.connect ([this] { midiBlinker.triggerSent(); }));
+            connections.add (midiIOMonitor->sigReceived.connect ([this] { midiBlinker.triggerReceived(); }));
         }
 
         if (mappingService == nullptr)
@@ -119,7 +120,7 @@ public:
             mappingService = owner.services().find<MappingService>();
             if (mappingService != nullptr)
                 connections.add (mappingService->sigTempoTapApplied.connect (
-                    std::bind (&TempoAndMeterBar::flashTapTempo, &tempoBar)));
+                    [this] { tempoBar.flashTapTempo(); }));
         }
 
         auto* props = settings.getUserSettings();
@@ -135,8 +136,8 @@ public:
             tempoBar.stabilizeWithSession (false);
         }
 
-        mapButton.setEnabled (true);
-        mapButton.setVisible (true);
+        learnButton.setEnabled (true);
+        learnButton.setVisible (true);
         if (! isTimerRunning())
             startTimer (600);
 
@@ -148,7 +149,7 @@ public:
                 const auto assigned = keys->getKeyPressesAssignedToCommand (Commands::toggleMidiLearn);
                 if (! assigned.isEmpty())
                     tip << " (" << assigned.getReference (0).getTextDescription() << ")";
-                mapButton.setTooltip (tip);
+                learnButton.setTooltip (tip);
             }
 
         resized();
@@ -185,11 +186,11 @@ public:
                                    .withSizeKeepingCentre (tempoBarHeight * 2, tempoBarHeight));
         }
 
-        if (mapButton.isVisible())
+        if (learnButton.isVisible())
         {
             r.removeFromRight (4);
-            mapButton.setBounds (r.removeFromRight (tempoBarHeight * 2)
-                                     .withSizeKeepingCentre (tempoBarHeight * 2, tempoBarHeight));
+            learnButton.setBounds (r.removeFromRight (tempoBarHeight * 2)
+                                       .withSizeKeepingCentre (tempoBarHeight * 2, tempoBarHeight));
         }
 
         if (audioButton.isVisible())
@@ -219,7 +220,7 @@ public:
         {
             ViewHelpers::invokeDirectly (this, Commands::rotateContentView, true);
         }
-        else if (btn == &mapButton)
+        else if (btn == &learnButton)
         {
             ViewHelpers::invokeDirectly (this, Commands::toggleMidiLearn, true);
         }
@@ -241,7 +242,7 @@ public:
         // Keep the button in sync with the learn state no matter how it was
         // toggled (header button, keyboard shortcut, or menu).
         if (auto* mapping = owner.services().find<MappingService>())
-            mapButton.setToggleState (mapping->isLearning(), dontSendNotification);
+            learnButton.setToggleState (mapping->isLearning(), dontSendNotification);
     }
 
 private:
@@ -250,7 +251,7 @@ private:
     MidiIOMonitorPtr midiIOMonitor;
     MappingService* mappingService = nullptr;
     SettingButton viewBtn;
-    SettingButton mapButton;
+    SettingButton learnButton;
     SettingButton audioButton;
     AudioDeviceManager::AudioDeviceSetup lastSetup;
     TempoAndMeterBar tempoBar;
@@ -305,6 +306,21 @@ class Content::StatusBar : public Component,
                            private Timer
 {
 public:
+    /** Label that invokes a handler when double-clicked. */
+    class ClickableLabel : public Label
+    {
+    public:
+        std::function<void()> onDoubleClicked;
+
+        void mouseDoubleClick (const MouseEvent& ev) override
+        {
+            if (onDoubleClicked)
+                onDoubleClicked();
+            else
+                Label::mouseDoubleClick (ev);
+        }
+    };
+
     StatusBar (Context& g)
         : world (g),
           devices (world.devices()),
@@ -316,6 +332,16 @@ public:
         addAndMakeVisible (sampleRateLabel);
         addAndMakeVisible (streamingStatusLabel);
         addAndMakeVisible (statusLabel);
+
+        statusLabel.setTooltip ("Double-click to open audio settings");
+        statusLabel.onDoubleClicked = [this]() {
+            if (auto* const ui = world.services().find<UI>())
+                ui->showPreferencesDialog (ELEMENT_AUDIO_SETTINGS_NAME);
+        };
+
+        if (auto* const deviceService = world.services().find<DeviceService>())
+            deviceStatusConnection = deviceService->sigAudioDeviceStatus.connect (
+                [this] (const AudioDeviceMonitor::Status&) { updateLabels(); });
 
         const Font font (FontOptions (12.0f));
 
@@ -335,6 +361,7 @@ public:
 
     ~StatusBar()
     {
+        deviceStatusConnection.disconnect();
         latencySamplesChangedConnection.disconnect();
         sampleRate.removeListener (this);
         streamingStatus.removeListener (this);
@@ -404,7 +431,22 @@ public:
         {
             sampleRateLabel.setText ("N/A", dontSendNotification);
             streamingStatusLabel.setText ("N/A", dontSendNotification);
-            statusLabel.setText ("No Device", dontSendNotification);
+
+            AudioDeviceMonitor::Status deviceStatus;
+            if (auto* const deviceService = world.services().find<DeviceService>())
+                deviceStatus = deviceService->audioDeviceStatus();
+
+            if (deviceStatus.state == AudioDeviceMonitor::State::waiting
+                && deviceStatus.deviceName.isNotEmpty())
+            {
+                statusLabel.setText (String ("Disconnected: ") + deviceStatus.deviceName,
+                                     dontSendNotification);
+            }
+            else
+            {
+                statusLabel.setText ("No Device", dontSendNotification);
+            }
+
             statusLabel.setColour (Label::textColourId, Colors::toggleRed);
         }
 
@@ -425,11 +467,13 @@ private:
     DeviceManager& devices;
     PluginManager& plugins;
 
-    Label sampleRateLabel, streamingStatusLabel, statusLabel;
+    Label sampleRateLabel, streamingStatusLabel;
+    ClickableLabel statusLabel;
     ValueTree node;
     Value sampleRate, streamingStatus, status;
 
     SignalConnection latencySamplesChangedConnection;
+    SignalConnection deviceStatusConnection;
 
     friend class Timer;
     void timerCallback() override
@@ -461,7 +505,7 @@ Content::Content (Context& ctx)
     toolBarVisible = true;
     toolBarSize = 32;
 
-    const Node node (context().session()->getCurrentGraph());
+    const Node node (context().session()->getActiveGraph());
     setCurrentNode (node);
 
     resized();

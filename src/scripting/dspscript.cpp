@@ -1,12 +1,15 @@
 // Copyright 2023 Kushview, LLC <info@kushview.net>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include <cmath>
+
 #include "el/factories.hpp"
 #include <element/midipipe.hpp>
 #include "scripting/dspscript.hpp"
 #include "scripting/scriptloader.hpp"
 #include "scripting/bindings.hpp"
 #include <element/processor.hpp>
+#include <sol/types.hpp>
 
 using namespace element;
 using namespace juce;
@@ -307,14 +310,16 @@ private:
 DSPScript::DSPScript (sol::table tbl)
     : DSP (tbl)
 {
-    bool ok = DSP.valid();
-    if (ok)
+    using enum sol::call_status;
+
+    bool success = DSP.valid();
+    if (success)
     {
         L = DSP.lua_state();
-        ok = L != nullptr;
+        success = L != nullptr;
     }
 
-    if (ok)
+    if (success)
     {
         try
         {
@@ -330,95 +335,95 @@ DSPScript::DSPScript (sol::table tbl)
                 require ('el.MidiMessage')
                 require ('el.MidiPipe')
             )");
-            ok = result.status() == sol::call_status::ok;
+            success = result.status() == ok;
 
             switch (result.status())
             {
-                case sol::call_status::file:
+                case file:
                     DBG ("DSPScript: file error");
                     break;
-                case sol::call_status::gc:
+                case gc:
                     DBG ("DSPScript: gc error");
                     break;
-                case sol::call_status::handler:
+                case handler:
                     DBG ("DSPScript: handler error");
                     break;
-                case sol::call_status::memory:
+                case memory:
                     DBG ("DSPScript: memory error");
                     break;
-                case sol::call_status::runtime:
+                case runtime:
                     DBG ("DSPScript: runtime error");
                     break;
-                case sol::call_status::syntax:
+                case syntax:
                     DBG ("DSPScript: syntax error");
                     break;
-                case sol::call_status::yielded:
+                case yielded:
                     DBG ("DSPScript: yielded error");
                     break;
-                case sol::call_status::ok:
+                case ok:
                     break;
             }
         } catch (const sol::error& e)
         {
             DBG (e.what());
-            ok = false;
+            success = false;
         }
     }
 
-    if (ok)
+    if (success)
     {
         processFunc = DSP["process"];
         processRef = processFunc.registry_index();
-        ok = processRef != LUA_REFNIL && processRef != LUA_NOREF;
+        success = processRef != LUA_REFNIL && processRef != LUA_NOREF;
     }
 
-    if (ok)
+    if (success)
     {
         audio = lua::new_userdata<AudioBuffer<float>> (
             L, EL_MT_AUDIO_BUFFER_32);
         audioRef = luaL_ref (L, LUA_REGISTRYINDEX);
-        ok = audioRef != LUA_REFNIL && audioRef != LUA_NOREF;
+        success = audioRef != LUA_REFNIL && audioRef != LUA_NOREF;
     }
 
-    if (ok)
+    if (success)
     {
         midi = LuaMidiPipe::create (L, 4);
         midiRef = luaL_ref (L, LUA_REGISTRYINDEX);
-        ok = midiRef != LUA_REFNIL && midiRef != LUA_NOREF;
+        success = midiRef != LUA_REFNIL && midiRef != LUA_NOREF;
     }
 
-    if (ok)
+    if (success)
     {
         addAudioMidiPorts();
         addParameterPorts();
     }
 
-    if (ok)
+    if (success)
     {
         sol::state_view view (L);
         auto tmp = view.create_table();
         tmp["params"] = &paramData;
         paramsUserData = tmp["params"];
-        ok = paramsUserData.valid();
+        success = paramsUserData.valid();
     }
 
-    if (ok)
+    if (success)
     {
         sol::state_view view (L);
         auto tmp = view.create_table();
         tmp["controls"] = &controlData;
         controlsUserData = tmp["controls"];
-        ok = controlsUserData.valid();
+        success = controlsUserData.valid();
     }
 
-    if (ok)
+    if (success)
     {
         position = DSPScriptPosition::create (L);
         positionRef = luaL_ref (L, LUA_REGISTRYINDEX);
-        ok = positionRef != LUA_REFNIL && positionRef != LUA_NOREF;
+        success = positionRef != LUA_REFNIL && positionRef != LUA_NOREF;
     }
 
-    loaded = ok;
+    loaded = success;
     if (! loaded)
     {
         deref();
@@ -431,86 +436,107 @@ DSPScript::~DSPScript()
     deref();
 }
 
+template <typename... Args>
+bool DSPScript::callOptional (const char* name, Args&&... args)
+{
+    sol::protected_function f = DSP[name];
+    if (! f.valid())
+        return true;
+
+    auto result = f (std::forward<Args> (args)...);
+    if (result.valid())
+        return true;
+
+    sol::error error = result;
+    lastError = error.what();
+    std::clog << "[dsp script] " << name << ": " << lastError.toStdString() << std::endl;
+    return false;
+}
+
+bool DSPScript::init() { return callOptional ("init"); }
+bool DSPScript::prepare (double rate, int block) { return callOptional ("prepare", rate, block); }
+bool DSPScript::release() { return callOptional ("release"); }
+
 Result DSPScript::validate (const String& script)
 {
     if (script.isEmpty())
         return Result::fail ("script contains no code");
-    return Result::ok();
-#if 0
+
     sol::state state;
     element::Lua::initializeState (state);
     ScriptLoader loader (state.lua_state(), script);
 
     if (loader.hasError())
         return Result::fail (loader.getErrorMessage());
-    
-    auto ctx = std::make_unique<DSPScript> (loader.call());
-    if (! ctx->isValid())
-        return Result::fail ("could not parse script");
 
-    juce::Result result (juce::Result::fail ("Unknown script problem"));
-    
+    auto descriptor = loader.call();
+    if (loader.hasError())
+        return Result::fail (loader.getErrorMessage());
+    if (! descriptor.valid() || descriptor.get_type() != sol::type::table)
+        return Result::fail ("script did not return a table");
+
+    auto dsp = std::make_unique<DSPScript> (descriptor.as<sol::table>());
+    if (! dsp->isValid())
+        return Result::fail ("could not instantiate script");
+
     try
     {
-        const int block = 1024;
         const double rate = 44100.0;
+        const int block = 512;
+        const int cycles = 4;
 
-        using PT = PortType;
-        
-        // call node_io_ports() and node_params()
-        PortList validatePorts;
-        ctx->getPorts (validatePorts);
+        PortList ports;
+        dsp->getPorts (ports);
+        const int nchans = jmax (1, ports.size (PortType::Audio, true), ports.size (PortType::Audio, false));
+        const int nmidi = jmax (ports.size (PortType::Midi, true), ports.size (PortType::Midi, false));
 
-        // create a dummy audio buffer and midipipe
-        auto nchans = jmax (validatePorts.size (PT::Audio, true),
-                            validatePorts.size (PT::Audio, false));
-        auto nmidi  = jmax (validatePorts.size (PT::Midi, true),
-                            validatePorts.size (PT::Midi, false));
-        
-        ctx->prepare (rate, block);
-        state["__ln_validate_rate"]    = rate;
-        state["__ln_validate_nmidi"]   = nmidi;
-        state["__ln_validate_nchans"]  = nchans;
-        state["__ln_validate_nframes"] = block;
-        state.script (R"(
-            function __ln_validate_render()
-                local AudioBuffer = require ('el.AudioBuffer')
-                local MidiPipe    = require ('el.MidiPipe')
+        AudioSampleBuffer audio (nchans, block);
+        OwnedArray<MidiBuffer> midiBuffers;
+        Array<int> midiChannels;
+        for (int i = 0; i < nmidi; ++i)
+        {
+            midiBuffers.add (new MidiBuffer());
+            midiChannels.add (i);
+        }
+        MidiPipe midi (midiBuffers, midiChannels);
 
-                local a = AudioBuffer (__ln_validate_nchans, __ln_validate_nframes)
-                local m = MidiPipe (__ln_validate_nmidi)
-                
-                for _ = 1,4 do
-                    for i = 0,m:size() - 1 do
-                        local b = m:get(i)
-                        b:insert (0, midi.noteon (1, 60, math.random (1, 127)))
-                        b:insert (10, midi.noteoff (1, 60, 0))
-                    end
-                    node_render (a, m)
-                    a:clear()
-                    m:clear()
-                end
-                
-                a = nil
-                m = nil
-                collectgarbage()
-            end
+        if (! dsp->init())
+            return Result::fail ("init: " + dsp->getLastError());
+        if (! dsp->prepare (rate, block))
+            return Result::fail ("prepare: " + dsp->getLastError());
 
-            __ln_validate_render()
-            __ln_validate_render = nil
-            collectgarbage()
-        )");
+        for (int cycle = 0; cycle < cycles; ++cycle)
+        {
+            // A quiet test tone so gain-style scripts have something to shape.
+            for (int c = 0; c < nchans; ++c)
+                for (int f = 0; f < block; ++f)
+                    audio.setSample (c, f, 0.25f * std::sin (float (f) * 0.05f));
 
-        ctx->release();
-        ctx.reset();
-        result = Result::ok();
-    }
-    catch (const std::exception& e)
+            for (auto* buffer : midiBuffers)
+            {
+                buffer->clear();
+                buffer->addEvent (MidiMessage::noteOn (1, 60, 0.8f), 0);
+                buffer->addEvent (MidiMessage::noteOff (1, 60), block / 2);
+            }
+
+            dsp->process (audio, midi);
+            if (! dsp->isValid())
+                return Result::fail ("process: " + dsp->getLastError());
+
+            for (int c = 0; c < audio.getNumChannels(); ++c)
+                for (int f = 0; f < block; ++f)
+                    if (! std::isfinite (audio.getSample (c, f)))
+                        return Result::fail ("process produced non-finite audio samples");
+        }
+
+        if (! dsp->release())
+            return Result::fail ("release: " + dsp->getLastError());
+    } catch (const std::exception& e)
     {
-        result = Result::fail (e.what());
+        return Result::fail (e.what());
     }
-    return result;
-#endif
+
+    return Result::ok();
 }
 
 void DSPScript::getPorts (PortList& out)
@@ -524,48 +550,45 @@ void DSPScript::process (AudioSampleBuffer& a, MidiPipe& m)
     if (! loaded)
         return;
 
-    if (lua_rawgeti (L, LUA_REGISTRYINDEX, processRef) == LUA_TFUNCTION)
+    const int top = lua_gettop (L);
+
+    if (lua_rawgeti (L, LUA_REGISTRYINDEX, processRef) == LUA_TFUNCTION
+        && lua_rawgeti (L, LUA_REGISTRYINDEX, audioRef) == LUA_TUSERDATA
+        && lua_rawgeti (L, LUA_REGISTRYINDEX, midiRef) == LUA_TUSERDATA
+        && lua_rawgeti (L, LUA_REGISTRYINDEX, paramsUserData.registry_index()) == LUA_TUSERDATA
+        && lua_rawgeti (L, LUA_REGISTRYINDEX, controlsUserData.registry_index()) == LUA_TUSERDATA
+        && lua_rawgeti (L, LUA_REGISTRYINDEX, positionRef) == LUA_TUSERDATA)
     {
-        if (lua_rawgeti (L, LUA_REGISTRYINDEX, audioRef) == LUA_TUSERDATA)
+        (*audio)->setDataToReferTo (a.getArrayOfWritePointers(),
+                                    a.getNumChannels(),
+                                    a.getNumSamples());
+        (*midi)->swapWith (m);
+
+        if (playhead != nullptr)
+            (*position)->update (playhead->getPosition());
+
+        // Lua is built as C: an error inside an unprotected lua_call has no
+        // handler to unwind to and aborts the process. A protected call keeps
+        // the audio thread alive; the script is disabled instead. The String
+        // assignment only happens on that error path.
+        if (lua_pcall (L, 5, 0, 0) != LUA_OK)
         {
-            if (lua_rawgeti (L, LUA_REGISTRYINDEX, midiRef) == LUA_TUSERDATA)
-            {
-                if (lua_rawgeti (L, LUA_REGISTRYINDEX, paramsUserData.registry_index()) == LUA_TUSERDATA)
-                {
-                    if (lua_rawgeti (L, LUA_REGISTRYINDEX, controlsUserData.registry_index()) == LUA_TUSERDATA)
-                    {
-                        if (lua_rawgeti (L, LUA_REGISTRYINDEX, positionRef) == LUA_TUSERDATA)
-                        {
-                            (*audio)->setDataToReferTo (a.getArrayOfWritePointers(),
-                                                        a.getNumChannels(),
-                                                        a.getNumSamples());
-                            (*midi)->swapWith (m);
-
-                            if (playhead != nullptr)
-                                (*position)->update (playhead->getPosition());
-
-                            try
-                            {
-                                lua_call (L, 5, 0);
-                            } catch (const sol::error& e)
-                            {
-                                std::clog << e.what() << std::endl;
-                                loaded = false;
-                            }
-                            (*midi)->swapWith (m);
-
-                            for (int ci = outParams.size(); --ci >= 0;)
-                                outParams.getUnchecked (ci)->update (controlData[ci]);
-                        }
-                    }
-                }
-            }
+            lastError = lua_tostring (L, -1);
+            std::clog << "[dsp script] process: " << lastError.toStdString() << std::endl;
+            loaded = false;
         }
+
+        (*midi)->swapWith (m);
+
+        for (int ci = outParams.size(); --ci >= 0;)
+            outParams.getUnchecked (ci)->update (controlData[ci]);
     }
     else
     {
         DBG ("didn't get render function in callback");
     }
+
+    lua_settop (L, top);
 }
 
 void DSPScript::save (MemoryBlock& out)

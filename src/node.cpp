@@ -147,8 +147,6 @@ Node::Node (const Identifier& tp)
 }
 // clang-format on
 
-Node::~Node() noexcept {}
-
 //=============================================================================
 bool Node::isValid() const noexcept { return objectData.hasType (types::Node); }
 const String Node::getName() const noexcept { return getProperty (tags::name).toString(); }
@@ -486,7 +484,9 @@ ValueTree Node::addScript (const Script& script)
 
 void Node::setMissingProperties()
 {
-    stabilizePropertyString (tags::uuid, Uuid().toString());
+    // Generating a Uuid isn't free: only make one when actually missing.
+    if (! objectData.hasProperty (tags::uuid))
+        objectData.setProperty (tags::uuid, Uuid().toString(), nullptr);
     stabilizePropertyString (tags::type, types::Node.toString());
     stabilizePropertyString (tags::name, "Node");
     stabilizeProperty (tags::bypass, false);
@@ -823,6 +823,13 @@ MidiChannels Node::getMidiChannels() const
 
 void Node::restorePluginState()
 {
+    restoreOwnPluginState();
+    for (int i = 0; i < getNumNodes(); ++i)
+        getNode (i).restorePluginState();
+}
+
+void Node::restoreOwnPluginState()
+{
     if (! isValid())
         return;
 
@@ -915,7 +922,7 @@ void Node::restorePluginState()
             obj->setMidiProgramsState (getProperty (tags::midiProgramsState).toString().trim());
 
         obj->setMuted ((bool) getProperty (tags::mute, obj->isMuted()));
-        obj->setMuteInput ((bool) getProperty ("muteInput", obj->isMutingInputs()));
+        obj->setMuteInput ((bool) getProperty (tags::muteInput, obj->isMutingInputs()));
 
         if (hasProperty (tags::transpose))
             obj->setTransposeOffset (getProperty (tags::transpose));
@@ -930,9 +937,6 @@ void Node::restorePluginState()
     const bool clearStateProperty = false;
     if (clearStateProperty)
         objectData.removeProperty (tags::state, 0);
-
-    for (int i = 0; i < getNumNodes(); ++i)
-        getNode (i).restorePluginState();
 }
 
 void Node::savePluginState()
@@ -1006,7 +1010,7 @@ void Node::savePluginState()
         setProperty (tags::globalMidiPrograms, obj->useGlobalMidiPrograms());
         setProperty (tags::midiProgramsEnabled, obj->areMidiProgramsEnabled());
         setProperty (tags::mute, obj->isMuted());
-        setProperty ("muteInput", obj->isMutingInputs());
+        setProperty (tags::muteInput, obj->isMutingInputs());
         String mps;
         obj->getMidiProgramsState (mps);
         setProperty (tags::midiProgramsState, mps);
@@ -1194,7 +1198,7 @@ void Node::setMuted (bool shouldBeMuted)
 void Node::setMuteInput (bool shouldMuteInputs)
 {
     if (shouldMuteInputs != isMutingInputs())
-        setProperty ("muteInput", shouldMuteInputs);
+        setProperty (tags::muteInput, shouldMuteInputs);
     if (auto* obj = getObject())
         obj->setMuteInput (isMutingInputs());
 }

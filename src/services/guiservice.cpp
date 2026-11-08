@@ -18,6 +18,7 @@
 
 #include "auth.hpp"
 #include "engine/midipanic.hpp"
+#include "tracer.hpp"
 #include "messages.hpp"
 #include "services/mappingservice.hpp"
 #include "services/sessionservice.hpp"
@@ -29,12 +30,39 @@
 #include "ui/systemtray.hpp"
 #include "ui/virtualkeyboardview.hpp"
 #include "ui/windowmanager.hpp"
+#include "win32.hpp"
 
 #ifndef ELEMENT_USE_SYSTEM_TRAY
 #define ELEMENT_USE_SYSTEM_TRAY 1
 #endif
 
 namespace element {
+
+/** Returns true if the main window should not be shown at launch and instead
+    wait in the system tray. Honours the "start hidden" setting, a `--hidden`
+    command line flag, and on Windows the shortcut "Run: Minimized" option. */
+static bool shouldStartHidden (Settings& settings)
+{
+    if (! SystemTray::isAvailable() || ! settings.isSystrayEnabled())
+        return false;
+
+    if (settings.isStartHiddenEnabled())
+        return true;
+
+    if (JUCEApplicationBase::getCommandLineParameterArray().contains ("--hidden"))
+        return true;
+
+#if JUCE_WINDOWS
+    STARTUPINFOW info = {};
+    info.cb = sizeof (info);
+    GetStartupInfoW (&info);
+    if ((info.dwFlags & STARTF_USESHOWWINDOW) != 0
+        && (info.wShowWindow == SW_SHOWMINIMIZED || info.wShowWindow == SW_SHOWMINNOACTIVE || info.wShowWindow == SW_MINIMIZE))
+        return true;
+#endif
+
+    return false;
+}
 
 //=============================================================================
 class DefaultContentFactory : public ContentFactory
@@ -251,7 +279,7 @@ void GuiService::ForegroundCheck::timerCallback()
     if (foreground)
     {
         if (session)
-            ui.showPluginWindowsFor (session->getCurrentGraph(), true, false);
+            ui.showPluginWindowsFor (session->getActiveGraph(), true, false);
         ui.getMainWindow()->toFront (true);
     }
     else if (! foreground)
@@ -375,7 +403,6 @@ void GuiService::saveProperties (PropertiesFile* props)
     {
         props->setValue ("mainWindowState", mainWindow->getWindowStateAsString());
         props->setValue ("mainWindowFullScreen", mainWindow->isFullScreen());
-        props->setValue ("mainWindowVisible", mainWindow->isOnDesktop() && mainWindow->isVisible());
     }
 
     if (_content)
@@ -650,7 +677,7 @@ void GuiService::showPluginWindowsFor (const Node& node, const bool recursive, c
 {
     if (! node.isGraph())
     {
-        if (force || (bool) node.getProperty ("windowVisible", false))
+        if (force || (bool) node.getProperty (tags::windowVisible, false))
             presentPluginWindow (node, force);
         return;
     }
@@ -662,6 +689,7 @@ void GuiService::showPluginWindowsFor (const Node& node, const bool recursive, c
 
 void GuiService::presentPluginWindow (const Node& node, const bool focus)
 {
+    EL_LOAD_TRACE (String ("presentPluginWindow: ") + node.getName());
     if (! windowManager)
         return;
 
@@ -673,7 +701,17 @@ void GuiService::presentPluginWindow (const Node& node, const bool focus)
 
     auto* window = windowManager->getPluginWindowFor (node);
     if (! window)
+    {
+        // Flag the window visible up front. A graph block embedding this node's editor
+        // watches this property and releases the editor synchronously, freeing the node's
+        // single editor slot so the window can create the node's real UI instead of
+        // falling back to a generic one.
+        Node target (node);
+        target.setProperty (tags::windowVisible, true);
         window = windowManager->createPluginWindowFor (node);
+        if (window == nullptr)
+            target.setProperty (tags::windowVisible, false);
+    }
 
     if (window != nullptr)
     {
@@ -725,17 +763,24 @@ void GuiService::run()
 
     mainWindow->setContentNonOwned (content(), true);
     mainWindow->centreWithSize (_content->getWidth(), _content->getHeight());
-    mainWindow->restoreWindowStateFromString (pf->getValue ("mainWindowState"));
     mainWindow->addKeyListener (keys.get());
     mainWindow->addKeyListener (commands().getKeyMappings());
     _content->restoreState (pf);
 
-    if (pf->getBoolValue ("mainWindowVisible", true))
+    const auto windowState = pf->getValue ("mainWindowState");
+    if (! shouldStartHidden (settings))
     {
+        // Create the native peer before restoring bounds so the window frame is
+        // known and the title bar is kept clear of docked taskbars.
+        mainWindow->addToDesktop();
+        mainWindow->restoreWindowStateFromString (windowState);
         mainWindow->setVisible (true);
         if (pf->getBoolValue ("mainWindowFullScreen", false))
             mainWindow->setFullScreen (true);
-        mainWindow->addToDesktop();
+    }
+    else
+    {
+        mainWindow->restoreWindowStateFromString (windowState);
     }
 
     sibling<SessionService>()->resetChanges();
@@ -1048,6 +1093,9 @@ bool GuiService::perform (const InvocationInfo& info)
                 else
                 {
                     window->addToDesktop();
+                    // Re-run the constrainer now the native frame is known so
+                    // the title bar isn't left under a docked taskbar.
+                    window->setBoundsConstrained (window->getBounds());
                     window->toFront (true);
                     if (session)
                         showPluginWindowsFor (session->getActiveGraph(), true, false);
@@ -1100,7 +1148,7 @@ bool GuiService::perform (const InvocationInfo& info)
         }
         case Commands::exportGraph: {
             auto session = context().session();
-            auto node = session->getCurrentGraph();
+            auto node = session->getActiveGraph();
             node.savePluginState();
 
             if (! impl->lastExportedGraph.isDirectory())
@@ -1160,6 +1208,7 @@ bool GuiService::perform (const InvocationInfo& info)
 
 void GuiService::stabilizeContent()
 {
+    EL_LOAD_TRACE ("GuiService::stabilizeContent");
     if (auto* cc = _content.get())
         cc->stabilize();
     refreshMainMenu();

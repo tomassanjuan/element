@@ -23,6 +23,12 @@
 
 namespace element {
 
+/** Upper bound on a block's custom size. The block is buffered to an image and
+    has a shadow effect, so an unclamped size read from a session would allocate
+    two enormous bitmaps. */
+static constexpr int maxBlockWidth = 8192;
+static constexpr int maxBlockHeight = 8192;
+
 namespace detail {
 inline static Context* context (juce::Component* comp)
 {
@@ -216,6 +222,14 @@ BlockComponent::BlockComponent (const Node& graph_, const Node& node_, const boo
     auto blockData = node.getBlockValueTree();
     displayModeValue = blockData.getPropertyAsValue (tags::displayMode, nullptr);
     displayModeValue.addListener (this);
+
+    // Updates synchronously: GuiService flags the window visible before building it, and
+    // this block has to give up its embedded editor before the window creates its own.
+    windowVisibleValue = node.getPropertyAsValue (tags::windowVisible, true);
+    windowVisibleValue.addListener (this);
+    if (! (bool) node.getProperty (tags::windowVisible, false))
+        blockData.removeProperty (tags::lastDisplayMode, nullptr);
+
     const auto idm = getDisplayModeFromString (displayModeValue.getValue());
     setDisplayModeInternal (idm, false);
     if (idm == Embed)
@@ -263,6 +277,7 @@ BlockComponent::~BlockComponent() noexcept
     nodeName.removeListener (this);
     hiddenPorts.removeListener (this);
     displayModeValue.removeListener (this);
+    windowVisibleValue.removeListener (this);
     deleteAllPins();
 }
 
@@ -326,12 +341,17 @@ void BlockComponent::setDisplayModeInternal (DisplayMode mode, bool force)
         {
             struct EmbedBockAsync : MessageManager::MessageBase
             {
-                using PtrType = std::unique_ptr<juce::Component>;
-                EmbedBockAsync (BlockComponent& b, const Node& n, UI& u, PtrType& p, DisplayMode om)
-                    : block (b), node (n), ui (u), embedded (p), oldMode (om) {}
+                EmbedBockAsync (BlockComponent& b, const Node& n, UI& u, DisplayMode om)
+                    : block (&b), node (n), ui (u), oldMode (om) {}
 
                 void messageCallback() override
                 {
+                    // The block may have been deleted (session change, rebuild)
+                    // before this message was delivered.
+                    if (block == nullptr)
+                        return;
+
+                    auto& embedded = block->embedded;
                     ui.closePluginWindowsFor (node, false);
 
                     if (embedded == nullptr)
@@ -347,27 +367,26 @@ void BlockComponent::setDisplayModeInternal (DisplayMode mode, bool force)
 
                     if (embedded != nullptr)
                     {
-                        block.addAndMakeVisible (embedded.get());
-                        block.updateSize();
-                        block.resized();
-                        embedded->addComponentListener (&block);
+                        block->addAndMakeVisible (embedded.get());
+                        block->updateSize();
+                        block->resized();
+                        embedded->addComponentListener (block);
                     }
                     else
                     {
                         if (oldMode != Embed)
-                            block.setDisplayModeInternal (oldMode, true);
+                            block->setDisplayModeInternal (oldMode, true);
                     }
                 }
 
-                BlockComponent& block;
+                Component::SafePointer<BlockComponent> block;
                 Node node;
                 UI& ui;
-                PtrType& embedded;
                 DisplayMode oldMode;
             };
 
             if (auto* ui = ViewHelpers::getGuiController (this))
-                (new EmbedBockAsync (*this, node, *ui, this->embedded, oldMode))->post();
+                (new EmbedBockAsync (*this, node, *ui, oldMode))->post();
         }
         else
         {
@@ -382,6 +401,27 @@ void BlockComponent::setDisplayModeInternal (DisplayMode mode, bool force)
 void BlockComponent::setDisplayMode (DisplayMode mode)
 {
     setDisplayModeInternal (mode, false);
+}
+
+void BlockComponent::stashDisplayModeForWindow()
+{
+    if (displayMode != Embed)
+        return;
+
+    node.getBlockValueTree().setProperty (
+        tags::lastDisplayMode, getDisplayModeKey (displayMode), nullptr);
+    setDisplayMode (Small);
+}
+
+void BlockComponent::restoreDisplayModeAfterWindow()
+{
+    auto blockData = node.getBlockValueTree();
+    const auto stashed = blockData.getProperty (tags::lastDisplayMode).toString();
+    if (stashed.isEmpty())
+        return;
+
+    blockData.removeProperty (tags::lastDisplayMode, nullptr);
+    setDisplayMode (getDisplayModeFromString (stashed));
 }
 
 void BlockComponent::setPortAlignment (PortAlignment newAlign)
@@ -427,7 +467,14 @@ void BlockComponent::valueChanged (Value& value)
     {
         update (false, false);
     }
-    else if (nodeObject.refersToSameSourceAs (nodeObject))
+    else if (windowVisibleValue.refersToSameSourceAs (value))
+    {
+        if ((bool) value.getValue())
+            stashDisplayModeForWindow();
+        else
+            restoreDisplayModeAfterWindow();
+    }
+    else if (nodeObject.refersToSameSourceAs (value))
     {
         willRemoveConn.disconnect();
         clearEmbedded();
@@ -530,20 +577,34 @@ void BlockComponent::mouseDown (const MouseEvent& e)
     if (e.mods.isPopupMenu())
     {
         auto* const world = ViewHelpers::getGlobals (this);
-        auto& plugins (world->plugins());
-        NodePopupMenu menu (node);
-        menu.addReplaceSubmenu (plugins);
+        Component::SafePointer<BlockComponent> safeThis (this);
+
+        NodePopupMenu menu (this, node, [safeThis]() {
+            if (auto* self = safeThis.getComponent())
+                self->removeNodeAndSelection();
+        });
+
+        if (world)
+            menu.addReplaceSubmenu (world->plugins());
+
+        menu.addScriptItems();
 
         if (! node.isMidiIONode() && ! node.isMidiDevice())
         {
             menu.addSeparator();
-            menu.addItem (10, "Ports...", true, false);
+            menu.addItem ("Ports...", [safeThis]() {
+                auto* self = safeThis.getComponent();
+                if (self == nullptr)
+                    return;
+                auto table = std::make_unique<NodePortsTable>();
+                table->setNode (self->node);
+                CallOutBox::launchAsynchronously (std::move (table), self->getScreenBounds(), nullptr);
+            });
         }
 
         menu.addSeparator();
         menu.addColorSubmenu (colorSelector);
         addDisplaySubmenu (menu);
-
         menu.addOptionsSubmenu();
 
         if (world)
@@ -552,59 +613,19 @@ void BlockComponent::mouseDown (const MouseEvent& e)
         colorSelector.setCurrentColour (Colour::fromString (
             node.getUIValueTree().getProperty ("color", color.toString()).toString()));
         colorSelector.addChangeListener (this);
-        const int result = menu.show();
-        colorSelector.removeChangeListener (this);
 
-        // Must match the array used by NodePopupMenu::addReplaceSubmenu so the
-        // menu index resolves to the correct plugin.
-        const auto types = plugins.getVisiblePluginTypes();
-
-        if (auto* message = menu.createMessageForResultCode (result))
-        {
-            const bool beingRemoved = nullptr != dynamic_cast<RemoveNodeMessage*> (message);
-            ViewHelpers::postMessageFor (this, message);
-            if (beingRemoved)
-                clearEmbedded();
-
-            for (const auto& nodeId : getGraphPanel()->selectedNodes)
-            {
-                if (nodeId == node.getNodeId())
-                    continue;
-                const Node selectedNode = graph.getNodeById (nodeId);
-                if (selectedNode.isValid())
-                {
-                    if (nullptr != dynamic_cast<RemoveNodeMessage*> (message))
-                    {
-                        if (auto panel = getGraphPanel())
-                            if (auto sb = panel->findBlock (selectedNode))
-                                sb->clearEmbedded();
-
-                        ViewHelpers::postMessageFor (this, new RemoveNodeMessage (selectedNode));
-                    }
-                }
-            }
-        }
-        else if (KnownPluginList::getIndexChosenByMenu (types, result) >= 0)
-        {
-            auto index = KnownPluginList::getIndexChosenByMenu (types, result);
-            ViewHelpers::postMessageFor (this,
-                                         new ReplaceNodeMessage (node, types.getUnchecked (index)));
-        }
-        else
-        {
-            switch (result)
-            {
-                case 10: {
-                    auto* component = new NodePortsTable();
-                    component->setNode (node);
-                    CallOutBox::launchAsynchronously (
-                        std::unique_ptr<Component> (component),
-                        getScreenBounds(),
-                        nullptr);
-                    break;
-                }
-            }
-        }
+        // Item actions may replace the main view and delete this block, so the
+        // menu must not block inside mouseDown and nothing after it may touch
+        // `this` without checking the safe pointer first.
+        menu.showMenuAsync (PopupMenu::Options().withDeletionCheck (*this), [safeThis] (int) {
+            auto* self = safeThis.getComponent();
+            if (self == nullptr)
+                return;
+            self->colorSelector.removeChangeListener (self);
+            self->repaint();
+            if (auto* gp = self->getGraphPanel())
+                gp->updateSelection();
+        });
     }
 
     repaint();
@@ -732,6 +753,28 @@ void BlockComponent::setSelectedInternal (bool status)
     repaint();
 }
 
+void BlockComponent::removeNodeAndSelection()
+{
+    ViewHelpers::postMessageFor (this, new RemoveNodeMessage (node));
+    clearEmbedded();
+
+    auto* const panel = getGraphPanel();
+    if (panel == nullptr)
+        return;
+
+    for (const auto& nodeId : panel->selectedNodes)
+    {
+        if (nodeId == node.getNodeId())
+            continue;
+        const Node selectedNode = graph.getNodeById (nodeId);
+        if (! selectedNode.isValid())
+            continue;
+        if (auto* sb = panel->findBlock (selectedNode))
+            sb->clearEmbedded();
+        ViewHelpers::postMessageFor (this, new RemoveNodeMessage (selectedNode));
+    }
+}
+
 void BlockComponent::makeEditorActive()
 {
     if (node.isGraph())
@@ -752,10 +795,7 @@ void BlockComponent::makeEditorActive()
     }
     else if (node.isValid())
     {
-        if (displayMode == Embed)
-        {
-            setDisplayMode (Small);
-        }
+        stashDisplayModeForWindow();
         ViewHelpers::presentPluginWindow (this, node);
     }
 }
@@ -798,7 +838,7 @@ void BlockComponent::paint (Graphics& g)
 
     if (isSelected())
     {
-        bgc = bgc.brighter (0.55f);
+        bgc = bgc.brighter (0.1f);
     }
 
     if (colorize)
@@ -807,7 +847,7 @@ void BlockComponent::paint (Graphics& g)
         {
             case Compact:
             case Small: {
-                g.setColour (selected ? barColor.brighter (0.275f) : barColor);
+                g.setColour (selected ? barColor.brighter (0.1f) : barColor);
                 g.fillRoundedRectangle (box.toFloat(), cornerSize);
                 break;
             }
@@ -838,6 +878,12 @@ void BlockComponent::paint (Graphics& g)
     {
         g.setColour (bgc.darker (0.6f));
         g.drawRoundedRectangle (box.toFloat(), cornerSize, 1.3f);
+    }
+
+    if (isSelected())
+    {
+        g.setColour (Colors::toggleBlue);
+        g.drawRoundedRectangle (box.toFloat(), cornerSize, 1.5f);
     }
 
     auto displayName = node.getDisplayName();
@@ -1190,7 +1236,7 @@ void BlockComponent::updateSize()
             {
                 if (detail::canResize (*this) && customWidth > 0 && customHeight > 0)
                 {
-                    setSize (customWidth, customHeight);
+                    setSize (jmin (customWidth, maxBlockWidth), jmin (customHeight, maxBlockHeight));
                     resized();
                 }
                 else
@@ -1214,10 +1260,8 @@ void BlockComponent::setCustomSize (int width, int height)
 {
     int mw = width, mh = height;
     getMinimumSize (mw, mh);
-    if (width < mw)
-        width = mw;
-    if (height < mh)
-        height = mh;
+    width = jlimit (mw, maxBlockWidth, width);
+    height = jlimit (mh, maxBlockHeight, height);
 
     if (customWidth != width || customHeight != height)
     {
@@ -1243,15 +1287,15 @@ void BlockComponent::setNodePosition (const int x, const int y)
 {
     if (vertical)
     {
-        node.setRelativePosition ((x + getWidth() / 2) / (double) getParentWidth(),
-                                  (y + getHeight() / 2) / (double) getParentHeight());
+        node.setRelativePosition ((x + (double) getWidth() / 2) / (double) getParentWidth(),
+                                  (y + (double) getHeight() / 2) / (double) getParentHeight());
         node.setProperty (tags::x, (double) x);
         node.setProperty (tags::y, (double) y);
     }
     else
     {
-        node.setRelativePosition ((y + getHeight() / 2) / (double) getParentHeight(),
-                                  (x + getWidth() / 2) / (double) getParentWidth());
+        node.setRelativePosition ((y + (double) getHeight() / 2) / (double) getParentHeight(),
+                                  (x + (double) getWidth() / 2) / (double) getParentWidth());
         node.setProperty (tags::y, (double) x);
         node.setProperty (tags::x, (double) y);
     }
@@ -1283,8 +1327,8 @@ void BlockComponent::updatePosition()
     if (! node.hasPosition() && nullptr != parent)
     {
         node.getRelativePosition (x, y);
-        x = x * (parent->getWidth()) - (getWidth() / 2);
-        y = y * (parent->getHeight()) - (getHeight() / 2);
+        x = x * (parent->getWidth()) - ((double) getWidth() / 2);
+        y = y * (parent->getHeight()) - ((double) getHeight() / 2);
         node.setPosition (x, y);
     }
     else
@@ -1355,22 +1399,29 @@ void BlockComponent::addDisplaySubmenu (PopupMenu& menuToAddTo)
     const auto block = node.getBlockValueTree();
     const auto mode = BlockComponent::getDisplayModeFromString (
         block.getProperty (tags::displayMode).toString());
+    Component::SafePointer<BlockComponent> safeThis (this);
 
     for (int i = 0; i <= BlockComponent::Embed; ++i)
     {
         const auto m = static_cast<BlockComponent::DisplayMode> (i);
         const bool enabled = m == BlockComponent::Embed ? detail::supportsEmbed (node) : true;
-        dMenu.addItem (BlockComponent::getDisplayModeName (m), enabled, mode == m, [this, block, m]() {
+        dMenu.addItem (BlockComponent::getDisplayModeName (m), enabled, mode == m, [safeThis, block, m]() {
+            auto* self = safeThis.getComponent();
+            if (self == nullptr)
+                return;
+            // Choosing a mode explicitly abandons any mode stashed for a plugin window.
             auto b = block;
+            b.removeProperty (tags::lastDisplayMode, nullptr);
             b.setProperty (tags::displayMode, BlockComponent::getDisplayModeKey (m), nullptr);
-            forEachSibling ([m] (BlockComponent& sibling) {
+            self->forEachSibling ([m] (BlockComponent& sibling) {
                 if (! sibling.isSelected())
                     return;
                 auto sb = sibling.node.getBlockValueTree();
+                sb.removeProperty (tags::lastDisplayMode, nullptr);
                 sb.setProperty (tags::displayMode, BlockComponent::getDisplayModeKey (m), nullptr);
             });
 
-            if (auto* gp = getGraphPanel())
+            if (auto* gp = self->getGraphPanel())
                 gp->updateConnectorComponents (true);
         });
     }
@@ -1381,12 +1432,15 @@ void BlockComponent::addDisplaySubmenu (PopupMenu& menuToAddTo)
     {
         const auto m = static_cast<BlockComponent::PortAlignment> (i);
         const bool enabled = true;
-        dMenu.addItem (portAlignmentName (m, vertical), enabled, m == _portAlign, [this, block, m]() {
+        dMenu.addItem (portAlignmentName (m, vertical), enabled, m == _portAlign, [safeThis, block, m]() {
+            auto* self = safeThis.getComponent();
+            if (self == nullptr)
+                return;
             auto b = block;
             b.setProperty (tags::portAlignment, portAlignmentKey (m), nullptr);
-            this->_portAlign = m;
-            resized();
-            forEachSibling ([m] (BlockComponent& sibling) {
+            self->_portAlign = m;
+            self->resized();
+            self->forEachSibling ([m] (BlockComponent& sibling) {
                 if (! sibling.isSelected())
                     return;
                 auto sb = sibling.node.getBlockValueTree();
@@ -1395,7 +1449,7 @@ void BlockComponent::addDisplaySubmenu (PopupMenu& menuToAddTo)
                 sibling.resized();
             });
 
-            if (auto* gp = getGraphPanel())
+            if (auto* gp = self->getGraphPanel())
                 gp->updateConnectorComponents (true);
         });
     }

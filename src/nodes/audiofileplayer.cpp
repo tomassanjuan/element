@@ -294,8 +294,7 @@ private:
     void bindHandlers()
     {
         processor.getPlayer().addChangeListener (this);
-        stateRestoredConnection = processor.restoredState.connect (std::bind (
-            &AudioFilePlayerEditor::onStateRestored, this));
+        stateRestoredConnection = processor.restoredState.connect ([this] { onStateRestored(); });
 
         chooser->addListener (this);
         watchButton.onClick = [this]() {
@@ -415,6 +414,9 @@ AudioFilePlayerNode::AudioFilePlayerNode()
     addLegacyParameter (volume = new AudioParameterFloat (juce::ParameterID ("volume", 1), "Volume", -60.f, 12.f, 0.f));
     addLegacyParameter (looping = new AudioParameterBool (juce::ParameterID ("loop", 1), "Loop", false));
 
+    // Needed before prepareToPlay: state restore opens the file.
+    formats.registerBasicFormats();
+
     for (auto* const param : getParameters())
         param->addListener (this);
 }
@@ -494,7 +496,6 @@ void AudioFilePlayerNode::openFile (const File& file)
 void AudioFilePlayerNode::prepareToPlay (double sampleRate, int maximumExpectedSamplesPerBlock)
 {
     thread.startThread();
-    formats.registerBasicFormats();
     player.prepareToPlay (maximumExpectedSamplesPerBlock, sampleRate);
 
     if (reader)

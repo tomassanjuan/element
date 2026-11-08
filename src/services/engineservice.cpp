@@ -6,6 +6,7 @@
 #include <element/engine.hpp>
 #include <element/graph.hpp>
 #include <element/node.hpp>
+#include <element/nodefactory.hpp>
 #include <element/plugins.hpp>
 #include <element/services.hpp>
 #include <element/settings.hpp>
@@ -14,8 +15,9 @@
 #include "engine/graphmanager.hpp"
 #include "engine/rootgraph.hpp"
 #include "nodes/mididevice.hpp"
+#include "tracer.hpp"
 
-#define ELEMENT_TRACE_SESSION_LOAD 0
+#define ELEMENT_TRACE_SESSION_LOAD EL_TRACE_SESSION_LOAD
 
 using namespace juce;
 
@@ -34,6 +36,42 @@ static void initializeRootGraphPorts (RootGraph* root, const Node& model)
     model.getPorts (ins, outs, PortType::Midi);
     root->setNumPorts (PortType::Midi, ins.size(), true, false);
     root->setNumPorts (PortType::Midi, outs.size(), false, false);
+}
+
+/** Scans an unverified plugin and registers it with the known plugins list.
+
+    Handles both JUCE audio plugin formats and Element node providers such
+    as CLAP, whose identifiers from the unverified scan are bare file paths.
+
+    @param plugins the plugin manager to verify against.
+    @param desc description of the unverified plugin to scan.
+    @param out receives the full descriptions produced by the scan.
+    @return true if at least one description was found and added.
+*/
+static bool verifyPlugin (PluginManager& plugins, const PluginDescription& desc, OwnedArray<PluginDescription>& out)
+{
+    auto& list = plugins.getKnownPlugins();
+
+    if (auto* const format = plugins.getAudioPluginFormat (desc.pluginFormatName))
+    {
+        list.removeFromBlacklist (desc.fileOrIdentifier);
+        list.removeType (desc);
+        return list.scanAndAddFile (desc.fileOrIdentifier, false, out, *format);
+    }
+
+    if (auto* const provider = plugins.getProvider (desc.pluginFormatName))
+    {
+        list.removeFromBlacklist (desc.fileOrIdentifier);
+        provider->scan (desc.fileOrIdentifier, out);
+        for (auto* const d : out)
+        {
+            list.removeType (*d);
+            list.addType (*d);
+        }
+        return ! out.isEmpty();
+    }
+
+    return false;
 }
 } // namespace detail
 
@@ -63,6 +101,7 @@ struct RootGraphHolder
      */
     bool attach (AudioEnginePtr engine)
     {
+        EL_LOAD_TRACE (String ("RootGraphHolder::attach: ") + model.getName());
         jassert (engine);
         if (! engine)
         {
@@ -189,7 +228,7 @@ public:
         auto engine = owner.context().audio();
         if (! engine)
             return 0;
-        const int currentIndex = engine->getActiveGraph();
+        const int currentIndex = engine->getActiveGraphIndex();
         if (currentIndex >= 0)
             for (auto* h : graphs)
                 if (auto* root = h->getRootGraph())
@@ -251,6 +290,11 @@ public:
         graphs.removeObject (g, true);
     }
 
+    void move (RootGraphHolder* g, int newIndex)
+    {
+        graphs.move (graphs.indexOf (g), newIndex);
+    }
+
     const OwnedArray<RootGraphHolder>& getGraphs() const { return graphs; }
 
 private:
@@ -274,7 +318,7 @@ EngineService::~EngineService()
 void EngineService::addConnection (const uint32 s, const uint32 sp, const uint32 d, const uint32 dp)
 {
     if (auto session = context().session())
-        if (auto* h = graphs->findFor (session->getCurrentGraph()))
+        if (auto* h = graphs->findFor (session->getActiveGraph()))
             if (auto* c = h->getController())
                 c->addConnection (s, sp, d, dp);
 }
@@ -364,7 +408,7 @@ void EngineService::duplicateGraph()
     auto& world = context();
     auto engine = world.audio();
     auto session = world.session();
-    const Node current (session->getCurrentGraph());
+    const Node current (session->getActiveGraph());
     duplicateGraph (current);
 }
 
@@ -412,7 +456,7 @@ void EngineService::removeGraph (int index)
                     index = session->getNumGraphs() - 1;
 
                 sgraphs.setProperty (tags::active, index, 0);
-                const Node nextGraph = session->getCurrentGraph();
+                const Node nextGraph = session->getActiveGraph();
 
                 if (nextGraph.isRootGraph())
                 {
@@ -443,6 +487,35 @@ void EngineService::removeGraph (int index)
         sigNodeRemoved (toRemove);
     // FIXME: dont notify the UI top-down
     sibling<UI>()->stabilizeContent();
+}
+
+void EngineService::moveGraph (const Node& graph, int newIndex)
+{
+    auto& world = context();
+    auto engine = world.audio();
+    auto session = world.session();
+
+    const auto sgraphs = session->data().getChildWithName (tags::graphs);
+    const int from = sgraphs.indexOf (graph.data());
+    if (from < 0 || from == newIndex || ! isPositiveAndBelow (newIndex, session->getNumGraphs()))
+        return;
+
+    if (auto* holder = graphs->findFor (graph))
+    {
+        if (auto* root = holder->getRootGraph())
+        {
+            if (root->getEngineIndex() >= 0)
+            {
+                jassert (root->getEngineIndex() == from);
+                engine->moveGraph (root->getEngineIndex(), newIndex);
+            }
+        }
+
+        graphs->move (holder, newIndex);
+    }
+
+    // model last: the tree rebuild this triggers must see the engine already moved
+    session->moveGraph (from, newIndex);
 }
 
 void EngineService::connectChannels (const Node& graph, const Node& src, const int sc, const Node& dst, const int dc)
@@ -596,12 +669,7 @@ Node EngineService::addPlugin (const PluginDescription& desc, const bool verifie
     OwnedArray<PluginDescription> plugs;
     if (! verified)
     {
-        auto* format = context().plugins().getAudioPluginFormat (desc.pluginFormatName);
-        jassert (format != nullptr);
-        auto& list (context().plugins().getKnownPlugins());
-        list.removeFromBlacklist (desc.fileOrIdentifier);
-        list.removeType (desc);
-        if (list.scanAndAddFile (desc.fileOrIdentifier, false, plugs, *format))
+        if (detail::verifyPlugin (context().plugins(), desc, plugs))
         {
             context().plugins().saveUserPlugins (context().settings());
         }
@@ -812,7 +880,7 @@ void EngineService::setRootNode (const Node& newRootNode)
             r->setNodeModel (newRootNode);
         }
 
-        engine->setCurrentGraph (index);
+        engine->setActiveGraphIndex (index);
     }
     else
     {
@@ -875,12 +943,7 @@ Node EngineService::addPlugin (const Node& graph, const PluginDescription& desc,
         }
         else
         {
-            auto* format = context().plugins().getAudioPluginFormat (desc.pluginFormatName);
-            jassert (format != nullptr);
-
-            list.removeFromBlacklist (desc.fileOrIdentifier);
-
-            if (list.scanAndAddFile (desc.fileOrIdentifier, false, plugs, *format))
+            if (detail::verifyPlugin (context().plugins(), desc, plugs))
             {
                 context().plugins().saveUserPlugins (context().settings());
             }
@@ -909,6 +972,7 @@ Node EngineService::addPlugin (const Node& graph, const PluginDescription& desc,
 
 void EngineService::sessionReloaded()
 {
+    EL_LOAD_TRACE ("EngineService::sessionReloaded");
     graphs->clear();
 
     auto session = context().session();

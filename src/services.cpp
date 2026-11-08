@@ -8,6 +8,7 @@
 
 #include <element/engine.hpp>
 #include <element/ui.hpp>
+#include <element/ui/mainwindow.hpp>
 
 #include "engine/graphmanager.hpp"
 #include "presetmanager.hpp"
@@ -64,6 +65,9 @@ public:
 
     void deactivate()
     {
+        if (! activated)
+            return;
+
         for (auto* s : services)
             s->deactivate();
 
@@ -157,39 +161,33 @@ void Services::run()
     if (auto* gui = find<GuiService>())
         gui->run();
 
-    auto session = context().session();
-    Session::ScopedFrozenLock freeze (*session);
+    auto finish = [this]() {
+        auto session = context().session();
+        if (auto* gui = find<GuiService>())
+        {
+            gui->stabilizeContent();
+            const Node graph (session->getActiveGraph());
+            auto* const window = gui->getMainWindow();
+
+            // don't show plugin windows on load if the UI is hidden
+            if (graph.isValid() && window != nullptr && window->isOnDesktop())
+                gui->showPluginWindowsFor (graph);
+        }
+    };
 
     if (auto* sc = find<SessionService>())
     {
-        bool loadDefault = true;
-
-        if (context().settings().openLastUsedSession())
-        {
-            const auto lastSession = context().settings().getUserSettings()->getValue (Settings::lastSessionKey);
-            if (File::isAbsolutePath (lastSession) && File (lastSession).existsAsFile())
-            {
-                sc->openFile (File (lastSession));
-                loadDefault = false;
-            }
-        }
-
-        if (loadDefault)
-            sc->openDefaultSession();
+        // The freeze covers the synchronous load. The safe-start and recovery
+        // prompts resolve later on the message thread, outside this scope;
+        // those paths go through openFile/openDefaultSession, which take their
+        // own locks exactly like the File menu does.
+        auto session = context().session();
+        Session::ScopedFrozenLock freeze (*session);
+        sc->openStartupSession (finish);
     }
-
-    if (auto* gui = find<GuiService>())
+    else
     {
-        gui->stabilizeContent();
-        const Node graph (session->getCurrentGraph());
-        auto* const props = context().settings().getUserSettings();
-
-        if (graph.isValid())
-        {
-            // don't show plugin windows on load if the UI was hidden
-            if (props->getBoolValue ("mainWindowVisible", true))
-                gui->showPluginWindowsFor (graph);
-        }
+        finish();
     }
 }
 

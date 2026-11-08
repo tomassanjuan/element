@@ -1,17 +1,21 @@
 // Copyright 2026 Kushview, LLC <info@kushview.net>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#include "ui/midimappingsview.hpp"
-#include "ui/viewhelpers.hpp"
+#include <algorithm>
+
 #include <element/juce/audio_devices.hpp>
-#include <element/ui/content.hpp>
-#include <element/ui/style.hpp>
-#include <element/session.hpp>
 #include <element/midimapping.hpp>
 #include <element/node.hpp>
 #include <element/parameter.hpp>
 #include <element/processor.hpp>
+#include <element/session.hpp>
+#include <element/transport.hpp>
+#include <element/ui/content.hpp>
+#include <element/ui/style.hpp>
+
 #include "services/mappingservice.hpp"
+#include "ui/midimappingsview.hpp"
+#include "ui/viewhelpers.hpp"
 
 namespace element {
 
@@ -220,9 +224,9 @@ private:
             comps.add (new BooleanPropertyComponent (
                 mapping.getPropertyAsValue (tags::toggle), TRANS ("Latch"), TRANS ("Toggle on each note-on")));
         }
-        else if (mapping.isTempoTarget())
+        else if (mapping.isSessionTarget())
         {
-            // A knob or switch has no note-on, so the user picks what counts as a tap.
+            // A knob or switch has no note-on, so the user picks what counts as a press.
             comps.add (new ChoicePropertyComponent (
                 mapping.getPropertyAsValue (tags::triggerMode),
                 TRANS ("Trigger"),
@@ -234,9 +238,9 @@ private:
                     mapping.getPropertyAsValue (tags::triggerValue), TRANS ("Threshold"), 1.0, 127.0, 1.0));
         }
 
-        // Node + parameter only apply to parameter targets; a tempo mapping
-        // drives the session tempo (tap tempo) and has no node/parameter.
-        if (! mapping.isTempoTarget())
+        // Node + parameter only apply to parameter targets; tempo and transport
+        // mappings drive the session and have no node/parameter.
+        if (! mapping.isSessionTarget())
         {
             // Target node.
             {
@@ -273,7 +277,10 @@ private:
             }
         }
 
-        addSection (mapping.isTempoTarget() ? TRANS ("Tap Tempo") : TRANS ("Mapping"), comps);
+        addSection (mapping.isTempoTarget()       ? TRANS ("Tap Tempo")
+                    : mapping.isTransportTarget() ? TRANS ("Transport")
+                                                  : TRANS ("Mapping"),
+                    comps);
     }
 
     /** Filter controls for the whole list. Bound to the owner's shared values so
@@ -538,7 +545,7 @@ void MidiMappingsView::updateRowOrder()
         }
     };
 
-    std::stable_sort (rowOrder.begin(), rowOrder.end(), [&] (int a, int b) {
+    std::ranges::stable_sort (rowOrder, [&] (int a, int b) {
         const int c = compare (a, b);
         return forwards ? c < 0 : c > 0;
     });
@@ -627,6 +634,11 @@ void MidiMappingsView::paintCell (Graphics& g, int row, int columnId, int w, int
                 text = TRANS ("Tempo");
                 break;
             }
+            if (mapping.isTransportTarget())
+            {
+                text = TRANS ("Transport");
+                break;
+            }
             auto node = session->findNodeById (mapping.getNodeUuid());
             text = node.isValid() ? node.getDisplayName() : String ("(missing)");
             break;
@@ -635,6 +647,12 @@ void MidiMappingsView::paintCell (Graphics& g, int row, int columnId, int w, int
             if (mapping.isTempoTarget())
             {
                 text = TRANS ("Tap Tempo");
+                break;
+            }
+            if (mapping.isTransportTarget())
+            {
+                auto action = transportActionFromString (mapping.getAction());
+                text = action ? getTransportActionName (*action) : TRANS ("(unknown)");
                 break;
             }
             auto node = session->findNodeById (mapping.getNodeUuid());

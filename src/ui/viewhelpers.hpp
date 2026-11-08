@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <functional>
+
 #include "ElementApp.h"
 #include <element/audioengine.hpp>
 #include <element/processor.hpp>
@@ -47,6 +49,24 @@ SessionPtr getSession (Component* c);
 /** Invoke a command directly */
 bool invokeDirectly (Component* c, const int commandID, bool async);
 
+/** Shows the Learn / Re-learn / Clear popup shared by MIDI-learnable session
+    controls (tap tempo, transport buttons). Callbacks are skipped if the
+    target component is deleted before the menu closes.
+
+    @param target       The component the menu is anchored to
+    @param learnLabel   Item text when nothing is mapped yet, e.g. "MIDI Learn Play"
+    @param mapped       True if a mapping exists (shows Re-learn and Clear)
+    @param description  Trigger description shown on the Clear item, may be empty
+    @param onLearn      Called when Learn / Re-learn is chosen
+    @param onClear      Called when Clear is chosen
+*/
+void showMidiLearnMenu (Component& target,
+                        const String& learnLabel,
+                        bool mapped,
+                        const String& description,
+                        std::function<void()> onLearn,
+                        std::function<void()> onClear);
+
 /** Post a message to Services
  
     This works by finding the Content and letting it handle message posting.
@@ -66,6 +86,19 @@ void presentPluginWindow (Component*, const Node&);
 void closePluginWindows (Component*, const bool visible = true);
 
 void closePluginWindowsFor (Component*, Node& node, const bool visible = true);
+
+/** Presents the script editor view for a Script node.
+
+    The view is presented asynchronously because presenting a main view
+    destroys the current one, and callers are often components that live
+    inside it (e.g. graph editor blocks). Does nothing if the node is not a
+    Script node or no Content can be found from the sender.
+
+    @param sender A component used to locate the Content
+    @param node   The Script node whose script should be edited
+    @param forUI  true to edit the UI script, false to edit the DSP script
+*/
+void presentScriptEditor (juce::Component* sender, const Node& node, bool forUI);
 
 /** Depth-first search for the first descendant of the given type.
 

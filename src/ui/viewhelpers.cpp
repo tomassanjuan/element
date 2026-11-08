@@ -9,6 +9,7 @@
 #include <element/ui/style.hpp>
 #include <element/ui/mainwindow.hpp>
 #include "ui/pluginwindow.hpp"
+#include "ui/scripteditorview.hpp"
 #include "ui/viewhelpers.hpp"
 #include <element/node.hpp>
 #include <element/ui/commands.hpp>
@@ -19,6 +20,36 @@
 
 namespace element {
 namespace ViewHelpers {
+
+void showMidiLearnMenu (Component& target,
+                        const String& learnLabel,
+                        bool mapped,
+                        const String& description,
+                        std::function<void()> onLearn,
+                        std::function<void()> onClear)
+{
+    enum
+    {
+        Learn = 1,
+        Clear
+    };
+
+    PopupMenu menu;
+    menu.addItem (Learn, mapped ? TRANS ("Re-learn MIDI Mapping") : learnLabel);
+    if (mapped)
+        menu.addItem (Clear, TRANS ("Clear MIDI Mapping") + (description.isNotEmpty() ? " (" + description + ")" : String()));
+
+    Component::SafePointer<Component> self (&target);
+    menu.showMenuAsync (PopupMenu::Options().withTargetComponent (&target),
+                        [self, onLearn, onClear] (int result) {
+                            if (self == nullptr)
+                                return;
+                            if (result == Learn && onLearn != nullptr)
+                                onLearn();
+                            else if (result == Clear && onClear != nullptr)
+                                onClear();
+                        });
+}
 
 void drawBasicTextRow (const String& text, Graphics& g, int w, int h, bool selected, int padding, Justification alignment)
 {
@@ -140,6 +171,21 @@ void postMessageFor (Component* c, Message* m)
         return cc->post (deleter.release());
     jassertfalse; // message not delivered
     deleter = nullptr;
+}
+
+void presentScriptEditor (Component* sender, const Node& node, bool forUI)
+{
+    if (sender == nullptr || ! node.isA (EL_NODE_FORMAT_NAME, EL_NODE_ID_SCRIPT))
+        return;
+
+    Component::SafePointer<Content> content (findContentComponent (sender));
+    if (content == nullptr)
+        return;
+
+    MessageManager::callAsync ([content, node, forUI]() {
+        if (auto* cc = content.getComponent())
+            cc->presentView (std::make_unique<ScriptNodeScriptEditorView> (cc->context(), node, forUI));
+    });
 }
 
 void presentPluginWindow (Component* c, const Node& node)

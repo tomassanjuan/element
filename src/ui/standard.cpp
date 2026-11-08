@@ -100,10 +100,8 @@ public:
         addAndMakeVisible (primary.get());
         bar.reset (new SmartLayoutResizeBar (&layout, 1, false));
         addAndMakeVisible (bar.get());
-        bar->mousePressed.connect (
-            std::bind (&ContentContainer::updateLayout, this));
-        bar->mouseReleased.connect (
-            std::bind (&ContentContainer::lockLayout, this));
+        bar->mousePressed.connect ([this]() { updateLayout(); });
+        bar->mouseReleased.connect ([this]() { lockLayout(); });
         secondary.reset (new ContentView());
         addAndMakeVisible (primary.get());
 
@@ -248,6 +246,8 @@ public:
         lastSecondaryHeight = jmax (50, lastSecondaryHeight);
         showAccessoryView = props->getIntValue ("ContentContainer_showAccessoryView", showAccessoryView);
         auto lastSecondaryName = props->getValue ("ContentContainer_lastSecondaryView");
+        if (lastSecondaryName.trim() == EL_VIEW_CONSOLE_LEGACY)
+            lastSecondaryName = EL_VIEW_CONSOLE;
         if (showAccessoryView)
         {
             owner.setSecondaryView (lastSecondaryName.trim());
@@ -400,71 +400,6 @@ public:
 private:
     StandardContent& owner;
 };
-
-//==============================================================================
-#if 0
-static ContentView* createLastContentView (Settings& settings)
-{
-    auto* props = settings.getUserSettings();
-    const String lastContentView = props->getValue ("lastContentView");
-    std::unique_ptr<ContentView> view;
-    typedef GraphEditorView DefaultView;
-
-    if (lastContentView.isEmpty())
-        view = std::make_unique<DefaultView>();
-    else if (lastContentView == "PatchBay")
-        view = std::make_unique<ConnectionGrid>();
-    else if (lastContentView == EL_VIEW_GRAPH_EDITOR)
-        view.reset (new GraphEditorView());
-    else if (lastContentView == EL_VIEW_CONTROLLERS)
-        view = std::make_unique<MidiMappingsView>();
-    else
-        view = std::make_unique<DefaultView>();
-
-    return view ? view.release() : nullptr;
-}
-
-static String stringProperty (Settings& settings, const String& property, const String defaultValue = String())
-{
-    auto* props = settings.getUserSettings();
-    return props == nullptr ? String() : props->getValue (property, defaultValue);
-}
-
-static bool booleanProperty (Settings& settings, const String& property, const bool defaultValue)
-{
-    auto* props = settings.getUserSettings();
-    return props == nullptr ? false : props->getBoolValue (property, defaultValue);
-}
-
-static void windowSizeProperty (Settings& settings, const String& property, int& w, int& h, const int defaultW, const int defaultH)
-{
-    auto* props = settings.getUserSettings();
-    StringArray tokens;
-    tokens.addTokens (props->getValue (property).trim(), false);
-    tokens.removeEmptyStrings();
-    tokens.trim();
-
-    w = defaultW;
-    h = defaultH;
-
-    const bool fs = tokens[0].startsWithIgnoreCase ("fs");
-    const int firstCoord = fs ? 1 : 0;
-
-    if (tokens.size() != firstCoord + 4)
-        return;
-
-    Rectangle<int> newPos (tokens[firstCoord].getIntValue(),
-                           tokens[firstCoord + 1].getIntValue(),
-                           tokens[firstCoord + 2].getIntValue(),
-                           tokens[firstCoord + 3].getIntValue());
-
-    if (! newPos.isEmpty())
-    {
-        w = newPos.getWidth();
-        h = newPos.getHeight();
-    }
-}
-#endif
 
 //==============================================================================
 StandardContent::StandardContent (Context& ctl_)
@@ -1072,6 +1007,7 @@ void StandardContent::getCommandInfo (CommandID commandID, ApplicationCommandInf
             int flags = (showAccessoryView() && getAccessoryViewName() == EL_VIEW_CONSOLE)
                             ? Info::isTicked
                             : 0;
+            result.addDefaultKeypress (KeyPress::F3Key, 0);
             result.setInfo ("Console", "Show the scripting console", "UI", flags);
             break;
         }
@@ -1237,6 +1173,14 @@ void StandardContent::getSessionState (String& state)
         }
     }
 
+    if (auto* const stp = nav->findPanel<SessionTreePanel>())
+    {
+        String stpState;
+        stp->getState (stpState);
+        if (stpState.isNotEmpty())
+            data.setProperty ("SessionTreePanel", stpState, nullptr);
+    }
+
     MemoryOutputStream mo;
     {
         GZIPCompressorOutputStream gzip (mo, 9);
@@ -1267,6 +1211,9 @@ void StandardContent::applySessionState (const String& state)
         String npvState = data.getProperty ("NodePropertiesView").toString();
         npv->setState (npvState);
     }
+
+    if (auto* const stp = nav->findPanel<SessionTreePanel>())
+        stp->setState (data.getProperty ("SessionTreePanel").toString());
 }
 
 void StandardContent::presentView (const juce::String& view)

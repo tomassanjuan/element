@@ -35,6 +35,9 @@ public:
             session.freezeChangeNotification = wasFrozen;
         }
 
+        ScopedFrozenLock (const ScopedFrozenLock&) = delete;
+        ScopedFrozenLock& operator= (const ScopedFrozenLock&) = delete;
+
     private:
         const Session& session;
         bool wasFrozen;
@@ -44,11 +47,23 @@ public:
 
     inline int getNumGraphs() const { return objectData.getChildWithName (tags::graphs).getNumChildren(); }
     inline Node getGraph (const int index) const { return Node (getGraphValueTree (index), false); }
-    Node getCurrentGraph() const { return getActiveGraph(); }
     Node getActiveGraph() const;
     int getActiveGraphIndex() const;
 
     bool addGraph (const Node& node, const bool setActive);
+
+    /** Moves a root graph to a new position in the session.
+
+        The active graph remains active after the move; the active index is
+        updated to follow it. This only changes the session model. Callers that
+        need the audio engine to follow should use EngineService::moveGraph.
+
+        @param from The current index of the graph to move.
+        @param to   The index the graph should be moved to.
+        @return true if the graph was moved, false if either index was out of
+                range or the indexes were equal.
+    */
+    bool moveGraph (const int from, const int to);
 
     juce::ValueTree getValueTree() const { return objectData; }
     bool loadData (const juce::ValueTree& data);
@@ -84,7 +99,7 @@ public:
 
     Node findNodeById (const juce::Uuid&);
 
-    typedef std::function<void (const juce::ValueTree& tree)> ValueTreeFunction;
+    using ValueTreeFunction = std::function<void (const juce::ValueTree& tree)>;
     void forEach (ValueTreeFunction handler) const;
 
     void setActiveGraph (int index);
@@ -133,7 +148,7 @@ private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (Session);
 };
 
-typedef juce::ReferenceCountedObjectPtr<Session> SessionPtr;
-typedef SessionPtr SessionRef;
+using SessionPtr = juce::ReferenceCountedObjectPtr<Session>;
+using SessionRef = SessionPtr;
 
 } // namespace element

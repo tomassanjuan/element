@@ -19,7 +19,9 @@
 #include "engine/midiengine.hpp"
 #include "scripting.hpp"
 #include <element/datapath.hpp>
+#include "services/deviceservice.hpp"
 #include "services/sessionservice.hpp"
+#include "crashlog.hpp"
 #include "log.hpp"
 #include "messages.hpp"
 #include "auth.hpp"
@@ -88,23 +90,20 @@ private:
 
         auto* props = settings.getUserSettings();
 
-        String error = "No device found at startup";
-        if (auto dxml = props->getXmlValue ("devices"))
+        String error;
+        if (auto dxml = props->getXmlValue (Settings::devicesKey))
         {
+            // Never substitute another device for the saved one: if it isn't
+            // connected right now, stay silent and let the device monitor
+            // restore it when it comes back (see AudioDeviceMonitor).
             error = devices.initialise (DeviceManager::maxAudioChannels,
                                         DeviceManager::maxAudioChannels,
                                         dxml.get(),
-                                        true,
+                                        false,
                                         "*",
                                         nullptr);
-            if (error.isNotEmpty())
-            {
-                auto setup = devices.getAudioDeviceSetup();
-                error = devices.setAudioDeviceSetup (setup, true);
-            }
         }
-
-        if (error.isNotEmpty())
+        else
         {
 #if JUCE_WINDOWS
             devices.setCurrentAudioDeviceType ("Windows Audio (Low Latency Mode)", true);
@@ -115,7 +114,7 @@ private:
 
         if (error.isNotEmpty())
         {
-            Logger::writeToLog (error);
+            Logger::writeToLog (String ("[element] audio device not opened at startup: ") + error);
         }
     }
 
@@ -212,7 +211,9 @@ bool Application::moreThanOneInstanceAllowed() { return true; }
 
 void Application::initialise (const String& commandLine)
 {
-    world = std::make_unique<Context> (RunMode::Standalone, commandLine);
+    // Neither the plugin scanner worker nor a secondary instance may build a
+    // Context: doing so would open the user's settings and rewrite them from a
+    // stale snapshot at shutdown.
     if (maybeLaunchScannerWorker (commandLine))
         return;
 
@@ -222,6 +223,12 @@ void Application::initialise (const String& commandLine)
         return;
     }
 
+    // Only the real application gets crash logging: the scanner worker keeps
+    // its own no-op handler (installed by its constructor above), and a plugin
+    // never runs this code at all.
+    CrashLog::install (Log::getMainLogFile());
+
+    world = std::make_unique<Context> (RunMode::Standalone, commandLine);
     initializeModulePath();
     printCopyNotice();
 
@@ -252,7 +259,8 @@ bool Application::canShutdown()
         return result.has_value() ? *result : true;
     }
 
-    if (auto app = dynamic_cast<Application*> (getInstance()))
+    auto* const app = dynamic_cast<Application*> (getInstance());
+    if (app != nullptr && app->world != nullptr)
     {
         auto& services = app->world->services();
         auto ssvc = services.find<SessionService>();
@@ -264,6 +272,8 @@ bool Application::canShutdown()
 
 void Application::shutdown()
 {
+    workers.clearQuick (true);
+
     if (! world)
         return;
 
@@ -274,7 +284,6 @@ void Application::shutdown()
 #if JUCE_LINUX
     applyMidiSettings.reset();
 #endif
-    workers.clearQuick (true);
     auto& srvs = world->services();
     srvs.saveSettings();
 
@@ -302,11 +311,15 @@ void Application::shutdown()
 
     if (auto el = world->devices().createStateXml())
         props->setValue (Settings::devicesKey, el.get());
+    settings.saveIfNeeded();
 
     engine = nullptr;
     Logger::setCurrentLogger (nullptr);
     world->setEngine (nullptr);
     world = nullptr;
+
+    // Last: crashes during engine/plugin teardown above are still logged.
+    CrashLog::uninstall();
 }
 
 void Application::systemRequestedQuit()
@@ -404,7 +417,13 @@ void Application::suspended() {}
 void Application::resumed()
 {
     auto& devices (world->devices());
-    devices.restartLastAudioDevice();
+    // Restarting with an empty setup asserts; if nothing was ever open the
+    // device monitor owns any restore that might be needed.
+    const auto setup = devices.getAudioDeviceSetup();
+    if (setup.inputDeviceName.isNotEmpty() || setup.outputDeviceName.isNotEmpty())
+        devices.restartLastAudioDevice();
+    if (auto* const deviceService = world->services().find<DeviceService>())
+        deviceService->onResume();
 }
 
 void Application::finishLaunching()
@@ -458,7 +477,7 @@ void Application::printCopyNotice()
 bool Application::maybeLaunchScannerWorker (const String& commandLine)
 {
     workers.clearQuick (true);
-    workers.add (world->plugins().createAudioPluginScannerWorker());
+    workers.add (PluginManager::createAudioPluginScannerWorker());
     StringArray processIds = { EL_PLUGIN_SCANNER_PROCESS_ID };
     for (auto* worker : workers)
     {

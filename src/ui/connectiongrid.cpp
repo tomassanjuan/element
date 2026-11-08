@@ -171,55 +171,12 @@ public:
             return PatchMatrixComponent::paint (g);
     }
 
-    void handleNodeMenuResult (const int result, const Node& node)
-    {
-        switch (result)
-        {
-            case NodePopupMenu::RemoveNode: {
-                ViewHelpers::postMessageFor (this, new RemoveNodeMessage (node));
-            }
-            break;
-
-            case NodePopupMenu::Duplicate: {
-                ViewHelpers::postMessageFor (this, new DuplicateNodeMessage (node));
-            }
-            break;
-        }
-    }
-
-    void showMenuForNode (const Node& node)
-    {
-        auto* const world = ViewHelpers::getGlobals (this);
-
-        NodePopupMenu menu (node);
-
-        if (world)
-            menu.addPresetsMenu (world->presets());
-
-        const int result = menu.show();
-        if (auto* message = menu.createMessageForResultCode (result))
-        {
-            ViewHelpers::postMessageFor (this, message);
-            return;
-        }
-        handleNodeMenuResult (result, node);
-    }
-
     void showMenuForNodeAndPort (const Node& n, const Port& p)
     {
-        auto* const world = ViewHelpers::getGlobals (this);
-
-        NodePopupMenu menu (n, p);
-
-        if (world)
+        NodePopupMenu menu (this, n, p);
+        if (auto* const world = ViewHelpers::getGlobals (this))
             menu.addPresetsMenu (world->presets());
-        const int result = menu.show();
-        if (auto* message = menu.createMessageForResultCode (result))
-        {
-            ViewHelpers::postMessageFor (this, message);
-            return;
-        }
-        handleNodeMenuResult (result, n);
+        menu.show();
     }
 
     boost::signals2::signal<void()> sigSelectionChanged;
@@ -719,8 +676,7 @@ public:
     {
         addAndMakeVisible (routeButton);
         routeButton.onClick = [this]() { applyRouting(); };
-        selectionConn = matrix.sigSelectionChanged.connect (
-            std::bind (&Controls::stabilize, this));
+        selectionConn = matrix.sigSelectionChanged.connect ([this] { stabilize(); });
 
         addAndMakeVisible (clearButton);
         clearButton.onClick = [this]() { clearRoutes(); };
@@ -1031,6 +987,6 @@ void ConnectionGrid::itemDropped (const SourceDetails& sd)
 void ConnectionGrid::didBecomeActive()
 {
     auto session = ViewHelpers::findContentComponent (this)->session();
-    setNode (session->getCurrentGraph());
+    setNode (session->getActiveGraph());
 }
 } // namespace element

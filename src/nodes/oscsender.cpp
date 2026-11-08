@@ -5,6 +5,8 @@
 #include "nodes/oscsender.hpp"
 #include "utils.hpp"
 
+using namespace juce;
+
 namespace element {
 
 OSCSenderNode::OSCSenderNode()
@@ -65,7 +67,7 @@ void OSCSenderNode::run()
 {
     while (! threadShouldExit())
     {
-        sem.wait();
+        sem.acquire();
 
         if (threadShouldExit())
             break;
@@ -102,7 +104,7 @@ void OSCSenderNode::stop()
     if (isThreadRunning())
     {
         signalThreadShouldExit();
-        sem.post();
+        sem.release();
         stopThread (100);
     }
 }
@@ -151,7 +153,7 @@ void OSCSenderNode::render (RenderContext& rc)
     }
 
     numSamples += nframes;
-    sem.post();
+    sem.release();
     midiIn->clear();
 }
 
@@ -233,7 +235,7 @@ std::vector<OSCMessage> OSCSenderNode::getOscMessages()
 
     {
         ScopedLock sl (lock);
-        std::copy (oscMessagesToLog.begin(), oscMessagesToLog.end(), std::back_inserter (copied));
+        std::ranges::copy (oscMessagesToLog, std::back_inserter (copied));
         oscMessagesToLog.clear();
     }
 

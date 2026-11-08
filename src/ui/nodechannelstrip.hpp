@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <functional>
+
 #include <element/ui.hpp>
 #include <element/processor.hpp>
 #include <element/signals.hpp>
@@ -28,7 +30,7 @@ public:
         nodeName.setText ("", dontSendNotification);
         nodeName.setJustificationType (Justification::centredBottom);
         nodeName.setEditable (false, true, false);
-        nodeName.setFont (Font (FontOptions (10.f)));
+        nodeName.setFont (Font (FontOptions (Style::fontSizeDefault)));
         nodeName.onTextChange = [this] {
             if (node.isValid())
                 node.setProperty (tags::name, nodeName.getText());
@@ -60,18 +62,16 @@ public:
     {
         unbindSignals();
         displayName.addListener (this);
+        nodeColor.addListener (this);
         flowBox.addListener (this);
         if (listenForNodeSelected)
-            nodeSelectedConnection = gui.nodeSelected.connect (
-                std::bind (&NodeChannelStripComponent::nodeSelected, this));
+            nodeSelectedConnection = gui.nodeSelected.connect ([this] { nodeSelected(); });
         volumeChangedConnection = channelStrip.volumeChanged.connect (
-            std::bind (&NodeChannelStripComponent::volumeChanged, this, std::placeholders::_1));
-        powerChangedConnection = channelStrip.powerChanged.connect (
-            std::bind (&NodeChannelStripComponent::powerChanged, this));
-        muteChangedConnection = channelStrip.muteChanged.connect (
-            std::bind (&NodeChannelStripComponent::muteChanged, this));
+            [this] (double value) { volumeChanged (value); });
+        powerChangedConnection = channelStrip.powerChanged.connect ([this] { powerChanged(); });
+        muteChangedConnection = channelStrip.muteChanged.connect ([this] { muteChanged(); });
         volumeDoubleClickedConnection = channelStrip.volumeLabelDoubleClicked.connect (
-            std::bind (&NodeChannelStripComponent::setUnityGain, this));
+            [this] { setUnityGain(); });
     }
 
     void unbindSignals()
@@ -81,6 +81,7 @@ public:
         _conns.clear();
 
         displayName.removeListener (this);
+        nodeColor.removeListener (this);
         flowBox.removeListener (this);
         nodeSelectedConnection.disconnect();
         volumeChangedConnection.disconnect();
@@ -106,21 +107,12 @@ public:
     {
         g.setColour (Colors::widgetBackgroundColor);
         g.fillAll();
-
-        if (! nodeColour.isTransparent())
-        {
-            g.setColour (nodeColour);
-            g.fillRect (getLocalBounds().removeFromTop (22));
-        }
-
-        g.setColour (Colors::contentBackgroundColor);
-        g.drawLine (getWidth() - 1.f, 0.0, getWidth() - 1.f, getHeight());
+        g.setColour (Colors::backgroundColor);
+        g.fillRect (getWidth() - 1, 0, 1, getHeight());
     }
 
     inline void timerCallback() override
     {
-        updateNodeColour();
-
         auto& meter = channelStrip.getSimpleMeter();
         if (ProcessorPtr ptr = node.getObject())
         {
@@ -212,6 +204,7 @@ public:
         audioOuts.clearQuick();
         node.getPorts (audioIns, audioOuts, PortType::Audio);
         displayName.referTo (node.getPropertyAsValue (tags::name));
+        nodeColor.referTo (node.getUIValueTree().getPropertyAsValue ("color", nullptr));
         stabilizeContent();
         startTimerHz (meterSpeedHz);
 
@@ -253,7 +246,7 @@ protected:
             return 0.f;
 
         float gain = isMonitoringInputs() || isAudioOutNode ? object->getInputGain() : object->getGain();
-        return Decibels::gainToDecibels (gain, -60.f);
+        return Decibels::gainToDecibels (gain, (float) channelStrip.getMinDecibels());
     }
 
 private:
@@ -275,7 +268,7 @@ private:
     [[maybe_unused]] bool monoMeter = false;
 
     Value displayName;
-    Colour nodeColour { Colours::transparentBlack };
+    Value nodeColor;
 
     SignalConnection nodeSelectedConnection;
     SignalConnection volumeChangedConnection;
@@ -289,24 +282,8 @@ private:
 
     void valueChanged (Value& value) override
     {
-        if (value.refersToSameSourceAs (displayName))
+        if (value.refersToSameSourceAs (displayName) || value.refersToSameSourceAs (nodeColor))
             updateNodeName();
-    }
-
-    /** Tints the title bar with the node's block color, if it has one. */
-    void updateNodeColour()
-    {
-        const auto colour = node.isValid() ? node.getColor (Colours::transparentBlack)
-                                           : Colours::transparentBlack;
-        if (colour == nodeColour)
-            return;
-
-        nodeColour = colour;
-        if (nodeColour.isTransparent())
-            nodeName.removeColour (Label::textColourId);
-        else
-            nodeName.setColour (Label::textColourId, nodeColour.contrasting (1.f));
-        repaint();
     }
 
     void updateNodeName()
@@ -318,6 +295,14 @@ private:
             if (node.hasModifiedName())
                 tooltip << " (" << node.getPluginName() << ")";
             nodeName.setTooltip (tooltip);
+
+            const auto color = node.getColor (Colours::transparentBlack);
+            const bool colorize = color != Colour (0x00000000);
+            nodeName.setColour (Label::backgroundColourId,
+                                colorize ? color : Colours::transparentBlack);
+            nodeName.setColour (Label::textColourId,
+                                colorize ? Colours::white.overlaidWith (color).contrasting()
+                                         : Colors::textColor);
         }
     }
 
@@ -401,20 +386,20 @@ private:
 
         if (ProcessorPtr object = node.getObject())
         {
-            auto gain = Decibels::decibelsToGain (value, -60.0);
+            auto gain = Decibels::decibelsToGain (value, channelStrip.getMinDecibels());
             if (isAudioOutNode || isMonitoringInputs())
             {
-                if (gain != (double) node.getProperty ("inputGain", gain) || gain != (double) object->getInputGain())
+                if (gain != (double) node.getProperty (tags::inputGain, gain) || gain != (double) object->getInputGain())
                 {
-                    node.setProperty ("inputGain", gain);
+                    node.setProperty (tags::inputGain, gain);
                     object->setInputGain (static_cast<float> (gain));
                 }
             }
             else
             {
-                if (gain != (double) node.getProperty ("gain", gain) || gain != (double) object->getGain())
+                if (gain != (double) node.getProperty (tags::gain, gain) || gain != (double) object->getGain())
                 {
-                    node.setProperty ("gain", gain);
+                    node.setProperty (tags::gain, gain);
                     object->setGain (static_cast<float> (gain));
                 }
             }

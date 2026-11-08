@@ -12,6 +12,7 @@ namespace element {
 class Context;
 
 struct MidiPanicParams;
+struct MultithreadingParams;
 
 class Settings : public juce::ApplicationProperties,
                  public juce::ChangeBroadcaster {
@@ -34,11 +35,16 @@ public:
     static const char* hidePluginWindowsWhenFocusLostKey;
     static const char* lastGraphKey;
     static const char* lastSessionKey;
+    /** Session a launch was opening; present at startup means the last run died while opening it. */
+    static const char* startupPendingSessionKey;
+    /** False from startup until a clean shutdown records true. */
+    static const char* cleanShutdownKey;
     static const char* legacyInterfaceKey;
     static const char* midiEngineKey;
     static const char* oscHostPortKey;
     static const char* oscHostEnabledKey;
     static const char* systrayKey;
+    static const char* startHiddenKey;
     static const char* midiOutLatencyKey;
     static const char* desktopScaleKey;
     static const char* meterColorSchemeKey;
@@ -55,9 +61,15 @@ public:
     static const char* authPreviewUpdatesKey;
     static const char* authAppcastUrlKey;
     static const char* transportStartStopContinue;
+    static const char* multithreadingEnabled;
+    static const char* multithreadingCount;
 
     bool getBool (std::string_view key, bool fallback = false) const noexcept;
+    int getInt (std::string_view key, int fallback = 0) const noexcept;
+    double getDouble (std::string_view key, double fallback = 0.0) const noexcept;
+    juce::String getString (std::string_view key, const juce::String& fallback = {}) const;
 
+    /** Stores a value. Does nothing if the stored value is already equal. */
     void set (std::string_view key, const juce::var& value);
 
     std::unique_ptr<juce::XmlElement> getLastGraph() const;
@@ -91,7 +103,7 @@ public:
     void setPluginWindowsOnTop (const bool);
 
     /** True if the user should be prompted to save when exiting the app */
-    bool askToSaveSession();
+    bool askToSaveSession() const;
     void setAskToSaveSession (const bool);
 
     const juce::File getDefaultNewSessionFile() const;
@@ -119,6 +131,11 @@ public:
 
     bool isSystrayEnabled() const;
     void setSystrayEnabled (bool);
+
+    /** True if the main window should start hidden in the system tray.
+        Only meaningful when the system tray is enabled and available. */
+    bool isStartHiddenEnabled() const;
+    void setStartHiddenEnabled (bool);
 
     double getMidiOutLatency() const;
     void setMidiOutLatency (double latencyMs);
@@ -183,6 +200,12 @@ public:
 
     /** Get global midi panic settings. */
     MidiPanicParams getMidiPanicParams() const;
+
+    /** Set global multithreaded rendering settings. */
+    void setMultithreadingParams (MultithreadingParams);
+
+    /** Get global multithreaded rendering settings. */
+    MultithreadingParams getMultithreadingParams() const;
 
     void setTransportRespondToStartStopContinue (bool shouldRespond);
     bool transportRespondToStartStopContinue() const;

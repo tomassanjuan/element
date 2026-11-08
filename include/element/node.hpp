@@ -40,8 +40,6 @@ public:
             .setProperty (tags::flow, flow.toString(), nullptr);
     }
 
-    ~Port() {}
-
     /** Returns the ValueTree of the Node containing this port
         will not always be valid 
      */
@@ -100,9 +98,6 @@ public:
 
     /** Creates a node with specific type */
     Node (const juce::Identifier& nodeType);
-
-    /** Destructor */
-    ~Node() noexcept;
 
     //=========================================================================
     /** Returns true if the underlying data is probably a node */
@@ -199,7 +194,7 @@ public:
     juce::Value getMutedValue() { return getPropertyAsValue (tags::mute); }
 
     /** Returns true if inputs are muted */
-    bool isMutingInputs() const { return (bool) getProperty ("muteInput", false); }
+    bool isMutingInputs() const { return (bool) getProperty (tags::muteInput, false); }
 
     /** Change the mute status of this Node */
     void setMuted (bool);
@@ -383,8 +378,16 @@ public:
     /** Saves the node state from Processor to state property */
     void savePluginState();
 
-    /** Reads state property and applies to Processor */
+    /** Reads state property and applies to Processor.
+        Recurses into child nodes; use restoreOwnPluginState() when children
+        are restored elsewhere.
+    */
     void restorePluginState();
+
+    /** Reads state property and applies to Processor for this node only,
+        without recursing into child nodes.
+    */
+    void restoreOwnPluginState();
 
     //=========================================================================
     /** Get the number of factory presets */
@@ -434,8 +437,7 @@ public:
     juce::ValueTree getScriptsValueTree() const noexcept { return objectData.getChildWithName (tags::scripts); }
 
     //=========================================================================
-    const bool operator== (const Node& o) const { return this->objectData == o.objectData; }
-    const bool operator!= (const Node& o) const { return this->objectData != o.objectData; }
+    bool operator== (const Node& o) const { return this->objectData == o.objectData; }
 
     /** Iterate over all ValueTree's recursively */
     void forEach (std::function<void (const juce::ValueTree& tree)>) const;
@@ -456,6 +458,18 @@ public:
     juce::Colour getColor (juce::Colour fallback) const noexcept
     {
         return getUIValueTree().hasProperty ("color") ? getColor() : fallback;
+    }
+
+    /** Change whether this node's strip is hidden in the graph mixer. */
+    void setHiddenInMixer (bool hidden)
+    {
+        getUIValueTree().setProperty (tags::hiddenInMixer, hidden, nullptr);
+    }
+
+    /** Returns true if this node's strip should be hidden in the graph mixer. */
+    bool isHiddenInMixer() const noexcept
+    {
+        return (bool) getUIValueTree().getProperty (tags::hiddenInMixer, false);
     }
 
     /** Add a script to this node.
@@ -539,13 +553,11 @@ private:
 class PortArray : public juce::Array<Port> {
 public:
     PortArray() {}
-    ~PortArray() {}
 };
 
 class NodeArray : public juce::Array<Node> {
 public:
     NodeArray() {}
-    ~NodeArray() {}
     void sortByName();
 };
 
@@ -557,11 +569,14 @@ struct ConnectionBuilder {
 
     ConnectionBuilder& operator= (const ConnectionBuilder& o)
     {
-        this->arcs = o.arcs;
-        this->target = o.target;
-        this->lastError = o.lastError;
-        this->portChannelMap.addCopiesOf (
-            o.portChannelMap, 0, o.portChannelMap.size());
+        if (this != &o) {
+            this->arcs = o.arcs;
+            this->target = o.target;
+            this->lastError = o.lastError;
+            this->portChannelMap.clearQuick (true);
+            this->portChannelMap.addCopiesOf (
+                o.portChannelMap, 0, o.portChannelMap.size());
+        }
         return *this;
     }
 

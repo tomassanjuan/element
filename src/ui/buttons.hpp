@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <functional>
+
 #include <element/ui/style.hpp>
 #include <element/node.hpp>
 
@@ -54,10 +56,25 @@ public:
         pathReduction = juce::roundToInt (jmax (2.f, reduceby));
     }
 
+    /** Invoked instead of a click when the button is right-clicked. Leave
+        unset to keep right-clicks behaving as ordinary clicks. */
+    std::function<void()> onContextMenu;
+
 protected:
     virtual Colour getTextColour()
     {
         return findColour (isEnabled() ? textColourId : textDisabledColourId);
+    }
+
+    /** @internal */
+    void mouseDown (const juce::MouseEvent& ev) override
+    {
+        if (onContextMenu != nullptr && isEnabled() && ev.mods.isPopupMenu())
+        {
+            onContextMenu();
+            return;
+        }
+        Button::mouseDown (ev);
     }
 
     /** @internal */
@@ -201,7 +218,7 @@ public:
 
         if (text.isNotEmpty())
         {
-            g.setFont (12.f);
+            g.setFont (fontSize);
             g.setColour (isEnabled() ? Colours::black : Colours::darkgrey);
             g.drawText (text, getLocalBounds(), Justification::centred);
         }
@@ -246,6 +263,13 @@ public:
     virtual void settingLabelDoubleClicked() {}
 
     void setDragable (const bool yn) { dragable = yn; }
+
+    /** Change the font size used to draw the value. */
+    void setFontSize (float newSize)
+    {
+        fontSize = newSize;
+        repaint();
+    }
 
     inline void setValue (double value)
     {
@@ -298,6 +322,7 @@ public:
     int places = 0;
     bool useMinMax = false;
     double minValue = 0.0, maxValue = 0.0;
+    float fontSize = Style::fontSizeDefault;
 
 private:
     bool dragable = true;
@@ -332,7 +357,7 @@ public:
 
         if (text.isNotEmpty())
         {
-            g.setFont (12.f);
+            g.setFont (Style::fontSizeDefault);
             g.setColour (isEnabled() ? Colours::black : Colours::darkgrey);
             g.drawText (text, getLocalBounds(), Justification::centred);
         }

@@ -130,6 +130,22 @@ void NodePropertiesView::init()
                             ModalCallbackFunction::forComponent (nodeMenuCallback, this));
     };
 
+    addChildComponent (scriptButton);
+    scriptButton.setButtonText ("Script");
+    scriptButton.setTriggeredOnMouseDown (true);
+    scriptButton.onClick = [this]() {
+        Component::SafePointer<Component> safeThis (this);
+        const auto node = _node;
+        PopupMenu menu;
+        menu.addItem ("Edit DSP Script", [safeThis, node]() {
+            ViewHelpers::presentScriptEditor (safeThis, node, false);
+        });
+        menu.addItem ("Edit UI Script", [safeThis, node]() {
+            ViewHelpers::presentScriptEditor (safeThis, node, true);
+        });
+        menu.showMenuAsync (PopupMenu::Options().withTargetComponent (&scriptButton));
+    };
+
     addAndMakeVisible (props);
 
     watcher.reset (new NodeWatcher());
@@ -182,8 +198,14 @@ void NodePropertiesView::resized()
     auto r1 (getLocalBounds().reduced (2));
     r1.removeFromTop (4);
     auto r2 = r1.removeFromTop (20);
-    combo.setBounds (r2.removeFromLeft (std::max (100, r2.getWidth() - 24)));
-    menuButton.setBounds (r2.withWidth (22).withX (r2.getX() + 2));
+    menuButton.setBounds (r2.removeFromRight (22));
+    r2.removeFromRight (2);
+    if (scriptButton.isVisible())
+    {
+        scriptButton.setBounds (r2.removeFromRight (52));
+        r2.removeFromRight (2);
+    }
+    combo.setBounds (r2.withWidth (std::max (100, r2.getWidth())));
     r1.removeFromTop (2);
     props.setBounds (r1);
 }
@@ -207,6 +229,7 @@ void NodePropertiesView::setNode (const Node& newNode)
     {
         nodeSync.setNode (nextNode);
         _node = nodeSync.getNode();
+        scriptButton.setVisible (_node.isA (EL_NODE_FORMAT_NAME, EL_NODE_ID_SCRIPT));
         resized();
     }
 
@@ -215,8 +238,7 @@ void NodePropertiesView::setNode (const Node& newNode)
 
     if (ProcessorPtr ptr = _node.getObject())
     {
-        midiProgramChangedConnection = ptr->midiProgramChanged.connect (
-            std::bind (&NodePropertiesView::updateMidiProgram, this));
+        midiProgramChangedConnection = ptr->midiProgramChanged.connect ([this] { updateMidiProgram(); });
     }
 
     updateProperties();
@@ -243,13 +265,11 @@ void NodePropertiesView::stabilizeContent()
 
     auto& gui = *cc->services().find<GuiService>();
     if (! selectedNodeConnection.connected())
-        selectedNodeConnection = gui.nodeSelected.connect (std::bind (
-            &NodePropertiesView::stabilizeContent, this));
+        selectedNodeConnection = gui.nodeSelected.connect ([this] { stabilizeContent(); });
 
     auto& sessions = *cc->services().find<SessionService>();
     if (! sessionLoadedConnection.connected())
-        sessionLoadedConnection = sessions.sigSessionLoaded.connect (std::bind (
-            &NodePropertiesView::onSessionLoaded, this));
+        sessionLoadedConnection = sessions.sigSessionLoaded.connect ([this] { onSessionLoaded(); });
 
     if (! sticky || ! _node.isValid())
     {
