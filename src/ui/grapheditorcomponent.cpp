@@ -245,7 +245,7 @@ public:
             return;
 
         // when disabled, idle at 1 Hz just to notice the setting being turned back on
-        const auto* globals = ViewHelpers::getGlobals (this);
+        auto* globals = ViewHelpers::getGlobals (this);
         const bool enabled = globals != nullptr && globals->settings().isCableLevelColorsEnabled();
         startTimer (enabled ? 66 : 1000);
 

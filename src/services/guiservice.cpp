@@ -23,7 +23,8 @@
 #include "services/mappingservice.hpp"
 #include "services/sessionservice.hpp"
 #include "ui/aboutscreen.hpp"
-#include "ui/capslock.hpp"#include "ui/pluginwindow.hpp"
+#include "ui/capslock.hpp"
+#include "ui/pluginwindow.hpp"
 #include <element/ui/meterbridge.hpp>
 #include <element/ui/simplemeter.hpp>
 #include "ui/systemtray.hpp"

@@ -22,7 +22,8 @@
 #include "messages.hpp"
 #include "auth.hpp"
 #include "services/oscservice.hpp"
-#include "ui/buttons.hpp"#include "ui/viewhelpers.hpp"
+#include "ui/buttons.hpp"
+#include "ui/viewhelpers.hpp"
 
 namespace element {
 
