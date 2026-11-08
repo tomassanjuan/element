@@ -928,7 +928,7 @@ void BlockComponent::paint (Graphics& g)
     }
 
     if (latencyHint.text.isNotEmpty())
-        subName = subName.isEmpty() ? latencyHint.text : subName + " · " + latencyHint.text;
+        subName = subName.isEmpty() ? latencyHint.text : subName + " - " + latencyHint.text;
 
     auto normalTextColor = node.isMissing() ? Colors::toggleRed : Colours::black;
     if (colorize && ! node.isMissing())
