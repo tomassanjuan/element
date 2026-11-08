@@ -8,6 +8,7 @@
 
 #include <element/ui/style.hpp>
 #include <element/ui/simplemeter.hpp>
+#include <element/ui/cliphold.hpp>
 
 using namespace juce;
 
@@ -119,29 +120,76 @@ struct SimpleLevelMeter : public Component,
 struct VuLevelMeter : public Component,
                       public Timer
 {
+    /** Height of the level readout box above the meter. It turns red on clipping. */
+    static constexpr int readoutHeight = 16;
+
     VuLevelMeter (AudioEnginePtr e, int channel, bool input)
         : meter (1, false)
     {
         levelMeter = e->getLevelMeter (channel, input);
         addAndMakeVisible (meter);
+        // clicks go to this component so they clear the clip light and the held peak
+        meter.setInterceptsMouseClicks (false, false);
         startTimerHz (20);
     }
 
-    void resized() override { meter.setBounds (getLocalBounds()); }
+    void resized() override
+    {
+        auto r = getLocalBounds();
+        r.removeFromTop (readoutHeight + 2);
+        meter.setBounds (r);
+    }
+
+    void paint (Graphics& g) override
+    {
+        const auto box = getLocalBounds().removeFromTop (readoutHeight);
+        g.setColour (clip.isClipped() ? Colours::red : Colour (0xff101010));
+        g.fillRect (box);
+
+        g.setColour (Colours::white);
+        g.setFont (Font (FontOptions (getWidth() >= 24 ? 11.f : 10.f, Font::bold)));
+        g.drawFittedText (levelText, box, Justification::centred, 1, 0.6f);
+    }
+
+    void mouseDown (const MouseEvent&) override
+    {
+        clip.clear();
+        meter.resetPeaks();
+        repaint();
+    }
 
     void timerCallback() override
     {
         if (! isShowing())
             return;
 
+        const float level = (float) levelMeter->level();
+
         // The engine level is a decaying peak. SimpleMeter expects RMS and adds
         // +3 dB for it, so scale by 1/sqrt(2) to make full scale read 0 dB.
-        meter.setValue (0, (float) levelMeter->level() * 0.70710678f);
+        meter.setValue (0, level * 0.70710678f);
         meter.refresh();
+
+        const bool wasClipped = clip.isClipped();
+        if (level >= 1.0f)
+            clip.hit();
+        clip.update();
+
+        const auto dB = Decibels::gainToDecibels (level, -60.f);
+        const auto text = dB <= -60.f ? String ("-inf")
+                                      : String (dB, getWidth() >= 24 ? 1 : 0);
+
+        if (wasClipped != clip.isClipped() || text != levelText)
+        {
+            levelText = text;
+            repaint();
+        }
     }
 
     SimpleMeter meter;
     AudioEngine::LevelMeterPtr levelMeter;
+    ClipHold clip;
+    String levelText { "-inf" };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (VuLevelMeter)
 };
