@@ -373,6 +373,15 @@ void MeterBridge::setMeterSize (int newSize)
     impl->setMeterSizes (newSize, impl->meterSpace);
 }
 
+int MeterBridge::preferredWidth() const
+{
+    const bool ins = hasVisibility (AudioIns);
+    const bool outs = hasVisibility (AudioOuts);
+    return (ins ? impl->meterSpaceRequired (true) : 0)
+           + (outs ? impl->meterSpaceRequired (false) : 0)
+           + (ins && outs ? impl->sectionPadding() * 2 : 0);
+}
+
 //==============================================================================
 uint32 MeterBridge::visibility() const noexcept
 {
@@ -461,6 +470,8 @@ void MeterBridgeView::mouseDown (const juce::MouseEvent& ev)
             bridge->setMeterSize (res);
 
         resized();
+        if (onConfigChanged)
+            onConfigChanged();
     }
 }
 

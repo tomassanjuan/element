@@ -30,6 +30,9 @@ public:
     int meterSize() const;
     void setMeterSize (int);
 
+    /** Width needed to show all currently visible meters. */
+    int preferredWidth() const;
+
     /** @internal */
     void resized() override;
     /** @internal */
@@ -53,6 +56,9 @@ public:
     void resized() override;
     void mouseDown (const juce::MouseEvent&) override;
     MeterBridge& meterBridge();
+
+    /** Called after the user changes the bridge's visibility or size. */
+    std::function<void()> onConfigChanged;
 
 private:
     std::unique_ptr<MeterBridge> bridge;

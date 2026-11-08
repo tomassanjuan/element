@@ -3,6 +3,7 @@
 
 #include <element/services.hpp>
 #include <element/ui/style.hpp>
+#include <element/ui/meterbridge.hpp>
 
 #include "ui/nodechannelstrip.hpp"
 #include "ui/graphmixerview.hpp"
@@ -259,6 +260,9 @@ private:
     [[maybe_unused]] bool dragging = false;
 };
 
+/** Whether the meter bridge is shown in the graph mixer (kept while the app runs). */
+static bool sShowMixerMeterBridge = true;
+
 class GraphMixerView::Content : public Component,
                                 public DragAndDropContainer
 {
@@ -268,6 +272,21 @@ public:
     {
         setOpaque (true);
         addAndMakeVisible (box);
+
+        meterView.willBecomeActive();
+        addAndMakeVisible (meterView);
+        meterView.initializeView (gui.services());
+        meterView.didBecomeActive();
+        meterView.onConfigChanged = [this]() { resized(); };
+
+        addAndMakeVisible (meterToggle);
+        meterToggle.setTooltip ("Show or hide the meter bridge");
+        meterToggle.setClickingTogglesState (true);
+        meterToggle.setToggleState (sShowMixerMeterBridge, dontSendNotification);
+        meterToggle.onClick = [this]() {
+            sShowMixerMeterBridge = meterToggle.getToggleState();
+            resized();
+        };
         box.setRowHeight (80);
         model.reset (new GraphMixerListBoxModel (gui, box));
         box.setModel (model.get());
@@ -299,7 +318,14 @@ public:
 
     void resized() override
     {
-        box.setBounds (getLocalBounds());
+        auto r = getLocalBounds();
+        meterToggle.setBounds (r.removeFromRight (24).removeFromTop (28).reduced (1));
+
+        meterView.setVisible (sShowMixerMeterBridge);
+        if (sShowMixerMeterBridge)
+            meterView.setBounds (r.removeFromRight (jmax (40, meterView.meterBridge().preferredWidth() + 8)));
+
+        box.setBounds (r);
     }
 
     void paint (Graphics& g) override
@@ -331,6 +357,8 @@ private:
     std::unique_ptr<GraphMixerListBoxModel> model;
     ChannelStripComponent channelStrip;
     HorizontalListBox box;
+    MeterBridgeView meterView;
+    TextButton meterToggle { "VU" };
     std::vector<SignalConnection> _conns;
 };
 
