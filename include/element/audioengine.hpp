@@ -83,13 +83,18 @@ public:
 
     struct LevelMeter : public juce::ReferenceCountedObject {
         LevelMeter() noexcept {}
+        /** Peak level with a slow fall-off (linear). */
         inline double level() const noexcept { return _level.get(); }
+
+        /** RMS level over a 0.3 s window, same window as the node strip meters (linear). */
+        inline double rms() const noexcept { return std::sqrt (_meanSquare.get()); }
 
     private:
         friend class AudioEngine;
 
         juce::Atomic<float> _level { 0 };
-        void updateLevel (const float* const*, int numChannels, int numSamples) noexcept;
+        juce::Atomic<float> _meanSquare { 0 };
+        void updateLevel (const float* const*, int numChannels, int numSamples, double sampleRate) noexcept;
     };
 
     using LevelMeterPtr = juce::ReferenceCountedObjectPtr<LevelMeter>;

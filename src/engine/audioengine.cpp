@@ -385,7 +385,7 @@ public:
         ScopedNoDenormals denormals;
 
         for (int c = 0; c < numInputChannels; ++c)
-            inMeters.getObjectPointerUnchecked (c)->updateLevel (inputChannelData, c, numSamples);
+            inMeters.getObjectPointerUnchecked (c)->updateLevel (inputChannelData, c, numSamples, sampleRate);
 
         if (numInputChannels > numOutputChannels)
         {
@@ -447,7 +447,7 @@ public:
         }
 
         for (int c = 0; c < numOutputChannels; ++c)
-            outMeters.getObjectPointerUnchecked (c)->updateLevel (outputChannelData, c, numSamples);
+            outMeters.getObjectPointerUnchecked (c)->updateLevel (outputChannelData, c, numSamples, sampleRate);
     }
 
     void processCurrentGraph (AudioBuffer<float>& buffer, MidiBuffer& midi)
@@ -1054,12 +1054,14 @@ AudioEngine::LevelMeterPtr AudioEngine::getLevelMeter (int channel, bool input)
     return larr[channel];
 }
 
-void AudioEngine::LevelMeter::updateLevel (const float* const* channelData, int numChannels, int numSamples) noexcept
+void AudioEngine::LevelMeter::updateLevel (const float* const* channelData, int numChannels, int numSamples, double sampleRate) noexcept
 {
     if (getReferenceCount() <= 1)
         return;
 
     auto localLevel = _level.get();
+    auto ms = _meanSquare.get();
+    const float msCoeff = (float) (1.0 / (0.3 * jmax (1.0, sampleRate)));
 
     if (numChannels >= 0)
     {
@@ -1068,6 +1070,7 @@ void AudioEngine::LevelMeter::updateLevel (const float* const* channelData, int 
             float s = 0;
 
             s += std::abs (channelData[numChannels][j]);
+            ms += (s * s - ms) * msCoeff;
 
             // s /= (float) numChannels;
 
@@ -1084,9 +1087,11 @@ void AudioEngine::LevelMeter::updateLevel (const float* const* channelData, int 
     else
     {
         localLevel = 0;
+        ms = 0;
     }
 
     _level.set (localLevel);
+    _meanSquare.set (ms);
 }
 
 } // namespace element
