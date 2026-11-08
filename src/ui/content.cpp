@@ -267,7 +267,7 @@ public:
             }
         }
 
-        startTimer (2000);
+        startTimer (1000);
         updateLabels();
     }
 
@@ -323,7 +323,8 @@ public:
             String strText = streamingStatus.getValue().toString();
             if (strText.isEmpty())
                 strText = "Running";
-            text << "Engine: " << strText << ":  CPU: " << String (devices.getCpuUsage() * 100.f, 1) << "%";
+            text << "Engine: " << strText << ":  CPU: " << String (devices.getCpuUsage() * 100.f, 1) << "%"
+                 << ":  Drops: " << devices.getXRunCount();
             streamingStatusLabel.setText (text, dontSendNotification);
 
             statusLabel.setText (String ("Device: ") + dev->getName(), dontSendNotification);
