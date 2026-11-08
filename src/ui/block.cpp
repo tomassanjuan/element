@@ -708,6 +708,40 @@ void BlockComponent::mouseDrag (const MouseEvent& e)
     if (getParentComponent() != nullptr)
         pos = getParentComponent()->getLocalPoint (nullptr, pos);
 
+    if (panel != nullptr && ! e.mods.isAltDown())
+    {
+        constexpr int snapDistance = 8;
+        int bestDx = snapDistance + 1, bestDy = snapDistance + 1;
+        int snapDx = 0, snapDy = 0;
+
+        const int xs[] = { pos.x, pos.x + getWidth() / 2, pos.x + getWidth() };
+        const int ys[] = { pos.y, pos.y + getHeight() / 2, pos.y + getHeight() };
+
+        for (int i = 0; i < panel->getNumChildComponents(); ++i)
+        {
+            auto* other = dynamic_cast<BlockComponent*> (panel->getChildComponent (i));
+            if (other == nullptr || other == this || other->isSelected())
+                continue;
+
+            const auto b = other->getBounds();
+            const int bx[] = { b.getX(), b.getCentreX(), b.getRight() };
+            const int by[] = { b.getY(), b.getCentreY(), b.getBottom() };
+
+            for (int k = 0; k < 3; ++k)
+            {
+                if (std::abs (bx[k] - xs[k]) < bestDx)
+                    bestDx = std::abs (bx[k] - xs[k]), snapDx = bx[k] - xs[k];
+                if (std::abs (by[k] - ys[k]) < bestDy)
+                    bestDy = std::abs (by[k] - ys[k]), snapDy = by[k] - ys[k];
+            }
+        }
+
+        if (bestDx <= snapDistance)
+            pos.x += snapDx;
+        if (bestDy <= snapDistance)
+            pos.y += snapDy;
+    }
+
     bool hasMoved = false;
 
     double ox, oy, nx, ny;
