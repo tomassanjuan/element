@@ -229,7 +229,7 @@ public:
             if (devices.getCurrentAudioDevice() != nullptr)
                 devices.closeAudioDevice();
             else
-                devices.restartLastAudioDevice();
+                startAudioDevice();
             updateAudioButton();
         }
     }
@@ -257,6 +257,27 @@ private:
     IconButton pluginMenu;
     MidiBlinker midiBlinker;
     Array<SignalConnection> connections;
+
+    void startAudioDevice()
+    {
+        auto& devices = owner.context().devices();
+        auto setup = devices.getAudioDeviceSetup();
+        const auto error = devices.setAudioDeviceSetup (setup, false);
+        updateAudioButton();
+        if (error.isEmpty() && devices.getCurrentAudioDevice() != nullptr)
+            return;
+
+        auto options = MessageBoxOptions()
+                           .withIconType (MessageBoxIconType::WarningIcon)
+                           .withTitle (TRANS ("Audio device unavailable"))
+                           .withMessage (error.isNotEmpty() ? error : TRANS ("The audio device could not be started. It may be in use by another application."))
+                           .withButton (TRANS ("Retry"))
+                           .withButton (TRANS ("Cancel"));
+        AlertWindow::showAsync (options, [safe = SafePointer<Toolbar> (this)] (int result) {
+            if (result == 1 && safe != nullptr)
+                safe->startAudioDevice();
+        });
+    }
 
     void updateAudioButton()
     {
