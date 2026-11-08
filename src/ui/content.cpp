@@ -252,6 +252,7 @@ private:
     SettingButton viewBtn;
     SettingButton mapButton;
     SettingButton audioButton;
+    AudioDeviceManager::AudioDeviceSetup lastSetup;
     TempoAndMeterBar tempoBar;
     TransportBar transport;
     IconButton pluginMenu;
@@ -261,8 +262,7 @@ private:
     void startAudioDevice()
     {
         auto& devices = owner.context().devices();
-        auto setup = devices.getAudioDeviceSetup();
-        const auto error = devices.setAudioDeviceSetup (setup, false);
+        const auto error = devices.setAudioDeviceSetup (lastSetup, false);
         updateAudioButton();
         if (error.isEmpty() && devices.getCurrentAudioDevice() != nullptr)
             return;
@@ -283,9 +283,10 @@ private:
     {
         auto& devices = owner.context().devices();
         const bool running = devices.getCurrentAudioDevice() != nullptr;
-        const auto setup = devices.getAudioDeviceSetup();
+        if (running)
+            lastSetup = devices.getAudioDeviceSetup();
         audioButton.setToggleState (running, dontSendNotification);
-        audioButton.setEnabled (running || setup.inputDeviceName.isNotEmpty() || setup.outputDeviceName.isNotEmpty());
+        audioButton.setEnabled (running || lastSetup.inputDeviceName.isNotEmpty() || lastSetup.outputDeviceName.isNotEmpty());
         audioButton.setTooltip (running ? TRANS ("Stop the audio engine and release the audio device")
                                         : TRANS ("Start the audio engine"));
     }
