@@ -29,9 +29,6 @@ public:
     GraphEditorComponent();
     virtual ~GraphEditorComponent();
 
-    /** Enables or disables coloring audio cables by signal level (all editors). */
-    static void setCableLevelColors (bool enabled);
-
     /** Set the currently displayed graph */
     void setNode (const Node& n);
 

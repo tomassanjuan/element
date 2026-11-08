@@ -22,9 +22,7 @@
 #include "messages.hpp"
 #include "auth.hpp"
 #include "services/oscservice.hpp"
-#include "ui/buttons.hpp"
-#include "ui/grapheditorcomponent.hpp"
-#include "ui/viewhelpers.hpp"
+#include "ui/buttons.hpp"#include "ui/viewhelpers.hpp"
 
 namespace element {
 
@@ -434,7 +432,6 @@ public:
         startHidden.setEnabled (systray.get());
         cableColors.init (*this, "Color graph cables by signal level", settings.isCableLevelColorsEnabled(), [this]() {
             settings.setCableLevelColorsEnabled (cableColors.get());
-            GraphEditorComponent::setCableLevelColors (cableColors.get());
             settingChanged();
         });
 

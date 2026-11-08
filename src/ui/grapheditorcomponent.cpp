@@ -1,6 +1,8 @@
 // Copyright 2023 Kushview, LLC <info@kushview.net>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include <element/context.hpp>
+#include <element/settings.hpp>
 #include <element/ui/popups.hpp>
 #include <element/node.hpp>
 #include <element/plugins.hpp>
@@ -114,8 +116,6 @@ private:
     [[maybe_unused]] Context& context;
     GraphEditorComponent& editor;
 };
-
-static std::atomic<bool> cableLevelColors { true };
 
 //=============================================================================
 class ConnectorComponent : public Component,
@@ -244,8 +244,13 @@ public:
         if (! isShowing())
             return;
 
+        // when disabled, idle at 1 Hz just to notice the setting being turned back on
+        const auto* globals = ViewHelpers::getGlobals (this);
+        const bool enabled = globals != nullptr && globals->settings().isCableLevelColorsEnabled();
+        startTimer (enabled ? 66 : 1000);
+
         std::optional<Colour> next;
-        if (cableLevelColors && sourceFilterID != 0 && sourceFilterID != EL_INVALID_PORT)
+        if (enabled && sourceFilterID != 0 && sourceFilterID != EL_INVALID_PORT)
         {
             if (ProcessorPtr src = graph.getNodeById (sourceFilterID).getObject())
             {
@@ -431,8 +436,6 @@ void GraphEditorComponent::SelectedNodes::itemDeselected (uint32 nodeId)
 }
 
 //=============================================================================
-void GraphEditorComponent::setCableLevelColors (bool enabled) { cableLevelColors = enabled; }
-
 GraphEditorComponent::GraphEditorComponent()
     : ViewHelperMixin (this),
       selectedNodes (*this)
