@@ -115,6 +115,8 @@ private:
     GraphEditorComponent& editor;
 };
 
+static std::atomic<bool> cableLevelColors { true };
+
 //=============================================================================
 class ConnectorComponent : public Component,
                            public SettableTooltipClient,
@@ -130,31 +132,17 @@ public:
     ~ConnectorComponent() {}
 
     /** Cable colour for a linear RMS level, using the same +3 dB calibration as the meters.
-        Grey = silence, then deep blue (very low) through green to red (at or over 0 dB). */
+        Grey = silence, blue = very low, green = normal, red = at or near 0 dB. */
     static Colour colourForLevel (float rms)
     {
-        // snapped to 3 dB steps so small level changes don't repaint the cable
-        const float db = rms > 0.0f ? std::round ((Decibels::gainToDecibels (rms) + 3.0103f) / 3.0f) * 3.0f : -100.0f;
+        const float db = rms > 0.0f ? Decibels::gainToDecibels (rms) + 3.0103f : -100.0f;
         if (db < -80.0f)
             return Colours::grey;
-
-        struct Stop { float db; Colour colour; };
-        static const Stop stops[] = {
-            { -80.0f, Colour (0xff1a237e) }, // deep blue
-            { -50.0f, Colour (0xff2196f3) }, // blue
-            { -30.0f, Colour (0xff00bcd4) }, // cyan
-            { -18.0f, Colour (0xff4caf50) }, // green
-            { -6.0f, Colour (0xffffeb3b) },  // yellow
-            { -1.0f, Colour (0xffff9800) },  // orange
-            { 0.0f, Colour (0xfff44336) },   // red
-        };
-
-        for (size_t i = 1; i < std::size (stops); ++i)
-            if (db < stops[i].db)
-                return stops[i - 1].colour.interpolatedWith (
-                    stops[i].colour, (db - stops[i - 1].db) / (stops[i].db - stops[i - 1].db));
-
-        return stops[std::size (stops) - 1].colour;
+        if (db < -40.0f)
+            return Colour (0xff2196f3);
+        if (db < -1.0f)
+            return Colour (0xff4caf50);
+        return Colour (0xfff44336);
     }
 
     bool isDragging() const { return dragging; }
@@ -257,11 +245,13 @@ public:
             return;
 
         std::optional<Colour> next;
-        if (sourceFilterID != 0 && sourceFilterID != EL_INVALID_PORT)
-          if (ProcessorPtr src = graph.getNodeById (sourceFilterID).getObject())
+        if (cableLevelColors && sourceFilterID != 0 && sourceFilterID != EL_INVALID_PORT)
         {
-            if (src->getPortType ((uint32) sourceFilterChannel) == PortType::Audio)
-                next = colourForLevel (src->getOutputRMS (src->getChannelPort ((uint32) sourceFilterChannel)));
+            if (ProcessorPtr src = graph.getNodeById (sourceFilterID).getObject())
+            {
+                if (src->getPortType ((uint32) sourceFilterChannel) == PortType::Audio)
+                    next = colourForLevel (src->getOutputRMS (src->getChannelPort ((uint32) sourceFilterChannel)));
+            }
         }
 
         if (next != levelColour)
@@ -441,6 +431,8 @@ void GraphEditorComponent::SelectedNodes::itemDeselected (uint32 nodeId)
 }
 
 //=============================================================================
+void GraphEditorComponent::setCableLevelColors (bool enabled) { cableLevelColors = enabled; }
+
 GraphEditorComponent::GraphEditorComponent()
     : ViewHelperMixin (this),
       selectedNodes (*this)

@@ -24,6 +24,7 @@
 #include "services/sessionservice.hpp"
 #include "ui/aboutscreen.hpp"
 #include "ui/capslock.hpp"
+#include "ui/grapheditorcomponent.hpp"
 #include "ui/pluginwindow.hpp"
 #include <element/ui/meterbridge.hpp>
 #include <element/ui/simplemeter.hpp>
@@ -748,6 +749,7 @@ void GuiService::run()
         context().settings().getDesktopScale());
     SimpleMeter::setColorScheme (
         static_cast<SimpleMeter::ColorScheme> (context().settings().getMeterColorScheme()));
+    GraphEditorComponent::setCableLevelColors (settings.isCableLevelColorsEnabled());
     MeterBridge::setLevelMode (
         static_cast<MeterBridge::LevelMode> (context().settings().getBridgeLevelMode()));
 

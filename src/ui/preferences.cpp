@@ -23,6 +23,7 @@
 #include "auth.hpp"
 #include "services/oscservice.hpp"
 #include "ui/buttons.hpp"
+#include "ui/grapheditorcomponent.hpp"
 #include "ui/viewhelpers.hpp"
 
 namespace element {
@@ -431,6 +432,11 @@ public:
             settingChanged();
         });
         startHidden.setEnabled (systray.get());
+        cableColors.init (*this, "Color graph cables by signal level", settings.isCableLevelColorsEnabled(), [this]() {
+            settings.setCableLevelColorsEnabled (cableColors.get());
+            GraphEditorComponent::setCableLevelColors (cableColors.get());
+            settingChanged();
+        });
 
         addAndMakeVisible (desktopScaleLabel);
         desktopScaleLabel.setText ("Desktop scale", dontSendNotification);
@@ -546,6 +552,7 @@ public:
         layoutSetting (r, mainContentLabel, mainContentBox, comboWidth);
         layoutSetting (r, systray);
         layoutSetting (r, startHidden);
+        layoutSetting (r, cableColors);
         layoutSetting (r, desktopScaleLabel, desktopScale, getWidth() / 4);
 
         layoutSetting (r, meterColorsLabel, meterColorsBox, comboWidth);
@@ -621,6 +628,7 @@ private:
 
     BoolSettingRow systray;
     BoolSettingRow startHidden;
+    BoolSettingRow cableColors;
 
     Label desktopScaleLabel;
     Slider desktopScale;

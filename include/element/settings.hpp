@@ -45,6 +45,7 @@ public:
     static const char* oscHostEnabledKey;
     static const char* systrayKey;
     static const char* startHiddenKey;
+    static const char* cableLevelColorsKey;
     static const char* midiOutLatencyKey;
     static const char* desktopScaleKey;
     static const char* meterColorSchemeKey;
@@ -136,6 +137,10 @@ public:
         Only meaningful when the system tray is enabled and available. */
     bool isStartHiddenEnabled() const;
     void setStartHiddenEnabled (bool);
+
+    /** True if graph editor audio cables are colored by signal level. */
+    bool isCableLevelColorsEnabled() const;
+    void setCableLevelColorsEnabled (bool);
 
     double getMidiOutLatency() const;
     void setMidiOutLatency (double latencyMs);

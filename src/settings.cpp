@@ -33,6 +33,7 @@ const char* Settings::oscHostPortKey = "oscHostPortKey";
 const char* Settings::oscHostEnabledKey = "oscHostEnabledKey";
 const char* Settings::systrayKey = "systrayKey";
 const char* Settings::startHiddenKey = "startHidden";
+const char* Settings::cableLevelColorsKey = "cableLevelColors";
 const char* Settings::midiOutLatencyKey = "midiOutLatency";
 const char* Settings::desktopScaleKey = "desktopScale";
 const char* Settings::meterColorSchemeKey = "meterColorScheme";
@@ -248,6 +249,9 @@ void Settings::setSystrayEnabled (bool enabled) { set (systrayKey, enabled); }
 
 bool Settings::isStartHiddenEnabled() const { return getBool (startHiddenKey, false); }
 void Settings::setStartHiddenEnabled (bool enabled) { set (startHiddenKey, enabled); }
+
+bool Settings::isCableLevelColorsEnabled() const { return getBool (cableLevelColorsKey, true); }
+void Settings::setCableLevelColorsEnabled (bool enabled) { set (cableLevelColorsKey, enabled); }
 
 //=============================================================================
 double Settings::getMidiOutLatency() const { return getDouble (midiOutLatencyKey, 0.0); }
