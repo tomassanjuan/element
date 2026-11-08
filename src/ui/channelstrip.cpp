@@ -47,6 +47,7 @@ ChannelStripComponent::ChannelStripComponent()
     fader.setRange (-60.0, 6.0, 0.001);
     fader.setValue (0.f, dontSendNotification);
     fader.setSkewFactor (2);
+    fader.setDoubleClickReturnValue (true, 0.0);
     fader.addListener (this);
     fader.setColour (Slider::trackColourId, Colours::black);
     setColour (Slider::thumbColourId, Colours::black.brighter (0.2f));

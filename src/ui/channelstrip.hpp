@@ -11,6 +11,48 @@
 
 namespace element {
 
+/** Vertical fader. Drags are relative to where they start, and holding shift
+    slows them down to 0.4x for fine adjustment. */
+class FaderSlider : public Slider
+{
+public:
+    void mouseDown (const MouseEvent& e) override
+    {
+        Slider::mouseDown (e);
+        anchor (e);
+    }
+
+    void mouseDrag (const MouseEvent& e) override
+    {
+        if (! isEnabled() || e.mods.isPopupMenu())
+            return;
+
+        const bool fine = e.mods.isShiftDown();
+        if (fine != wasFine)
+            anchor (e);
+
+        const double length = std::abs (getPositionOfValue (getMaximum()) - getPositionOfValue (getMinimum()));
+        if (length <= 0.0)
+            return;
+
+        const double speed = fine ? 0.4 : 1.0;
+        const double proportion = jlimit (0.0, 1.0, startProportion - (e.position.y - startY) / length * speed);
+        setValue (proportionOfLengthToValue (proportion));
+    }
+
+private:
+    double startProportion = 0.0;
+    float startY = 0.f;
+    bool wasFine = false;
+
+    void anchor (const MouseEvent& e)
+    {
+        startProportion = valueToProportionOfLength (getValue());
+        startY = e.position.y;
+        wasFine = e.mods.isShiftDown();
+    }
+};
+
 class ChannelStripComponent : public Component,
                               public Button::Listener,
                               public Value::Listener,
@@ -108,7 +150,7 @@ public:
     Signal<void()> volumeLabelDoubleClicked;
 
 private:
-    Slider fader;
+    FaderSlider fader;
     SimpleMeter meter;
     DecibelScale scale;
     Label name;
