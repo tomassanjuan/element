@@ -334,6 +334,9 @@ private:
     friend class Timer;
     void timerCallback() override
     {
+        if (! isShowing())
+            return;
+
         for (auto* const strip : strips)
         {
             strip->processMeter();

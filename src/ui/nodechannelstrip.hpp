@@ -113,6 +113,9 @@ public:
 
     inline void timerCallback() override
     {
+        if (! isShowing())
+            return;
+
         auto& meter = channelStrip.getSimpleMeter();
         if (ProcessorPtr ptr = node.getObject())
         {

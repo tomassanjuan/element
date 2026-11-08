@@ -482,6 +482,9 @@ private:
     friend class Timer;
     void timerCallback() override
     {
+        if (! isShowing())
+            return;
+
         updateLabels();
     }
 };
