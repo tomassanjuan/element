@@ -24,6 +24,7 @@
 #include "ui/aboutscreen.hpp"
 #include "ui/capslock.hpp"
 #include "ui/pluginwindow.hpp"
+#include <element/ui/meterbridge.hpp>
 #include <element/ui/simplemeter.hpp>
 #include "ui/systemtray.hpp"
 #include "ui/virtualkeyboardview.hpp"
@@ -709,6 +710,8 @@ void GuiService::run()
         context().settings().getDesktopScale());
     SimpleMeter::setColorScheme (
         static_cast<SimpleMeter::ColorScheme> (context().settings().getMeterColorScheme()));
+    MeterBridge::setLevelMode (
+        static_cast<MeterBridge::LevelMode> (context().settings().getBridgeLevelMode()));
 
     mainWindow = factory->createMainWindow();
     if (mainWindow == nullptr)

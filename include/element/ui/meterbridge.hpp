@@ -33,6 +33,14 @@ public:
     /** Draw the meters like the channel strip VU meters instead of segments. */
     void setVuStyle (bool);
 
+    /** What the VU style bridge meters measure. */
+    enum class LevelMode { Peak = 0,
+                           RMS = 1 };
+
+    /** Sets the level mode of every bridge, see Settings::getBridgeLevelMode(). */
+    static void setLevelMode (LevelMode);
+    static LevelMode getLevelMode();
+
     /** Width needed to show all currently visible meters. */
     int preferredWidth() const;
 

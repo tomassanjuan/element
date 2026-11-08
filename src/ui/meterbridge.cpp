@@ -163,10 +163,12 @@ struct VuLevelMeter : public Component,
         if (! isShowing())
             return;
 
-        const float level = (float) levelMeter->level();
+        const float raw = (float) levelMeter->level();
+        const bool rmsMode = MeterBridge::getLevelMode() == MeterBridge::LevelMode::RMS;
 
-        // The engine level is a decaying peak. SimpleMeter expects RMS and adds
-        // +3 dB for it, so scale by 1/sqrt(2) to make full scale read 0 dB.
+        // RMS uses the strips' 0.3 s window and +3 dB sine calibration. Peak is
+        // scaled by 1/sqrt(2) so SimpleMeter's +3 dB cancels and full scale reads 0 dB.
+        const float level = rmsMode ? (float) levelMeter->rms() * 1.41421356f : raw;
         meter.setValue (0, level * 0.70710678f);
         meter.refresh();
 
@@ -194,6 +196,24 @@ struct VuLevelMeter : public Component,
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (VuLevelMeter)
 };
 
+static MeterBridge::LevelMode sLevelMode = MeterBridge::LevelMode::Peak;
+
+static juce::ChangeBroadcaster& levelModeBroadcaster()
+{
+    static juce::ChangeBroadcaster broadcaster;
+    return broadcaster;
+}
+
+void MeterBridge::setLevelMode (LevelMode mode)
+{
+    if (sLevelMode == mode)
+        return;
+    sLevelMode = mode;
+    levelModeBroadcaster().sendChangeMessage();
+}
+
+MeterBridge::LevelMode MeterBridge::getLevelMode() { return sLevelMode; }
+
 class MeterBridge::Impl : public juce::ChangeListener
 {
 public:
@@ -201,12 +221,34 @@ public:
     {
         bridge.addAndMakeVisible (audioInLabel);
         bridge.addAndMakeVisible (audioOutLabel);
+        bridge.addAndMakeVisible (modeLabel);
+        modeLabel.setInterceptsMouseClicks (false, false);
+        modeLabel.setJustificationType (Justification::centred);
+        modeLabel.setFont (Font (FontOptions (9.4f)));
+        levelModeBroadcaster().addChangeListener (this);
     }
 
     ~Impl()
     {
         jassert (ctx != nullptr);
         ctx->devices().removeChangeListener (this);
+        levelModeBroadcaster().removeChangeListener (this);
+    }
+
+    void updateSectionLabels()
+    {
+        const String mode = ! vuStyle ? String() : (sLevelMode == LevelMode::RMS ? "RMS" : "Peak");
+
+        // With both sections shown the mode sits between IN and OUT.
+        const bool both = audioInsVisible && audioOutsVisible && mode.isNotEmpty();
+        const String suffix = (! both && mode.isNotEmpty()) ? " " + mode : String();
+        audioInLabel.setText ("IN" + suffix, dontSendNotification);
+        audioOutLabel.setText ("OUT" + suffix, dontSendNotification);
+        audioInLabel.setJustificationType (both ? Justification::centredLeft : Justification::centred);
+        audioOutLabel.setJustificationType (both ? Justification::centredRight : Justification::centred);
+
+        modeLabel.setText (both ? mode : String(), dontSendNotification);
+        modeLabel.setVisible (both);
     }
 
     int sectionPadding() { return 6; }
@@ -221,8 +263,14 @@ public:
         return meterSpaceRequired (true) + (sectionPadding() * 2) + meterSpaceRequired (false);
     }
 
-    void changeListenerCallback (juce::ChangeBroadcaster*) override
+    void changeListenerCallback (juce::ChangeBroadcaster* source) override
     {
+        if (source == &levelModeBroadcaster())
+        {
+            updateSectionLabels();
+            return;
+        }
+
         refresh();
         bridge.resized();
     }
@@ -302,6 +350,7 @@ public:
             r.setX (bridge.getWidth() / 2 - totalSpace / 2);
             r2.setX (r.getX());
             r1.setX (r.getX());
+            modeLabel.setBounds (r1.withWidth (totalSpace));
             r1.setWidth (meterSpaceRequired (true));
             audioInLabel.setBounds (r1);
 
@@ -396,6 +445,7 @@ public:
 
         refreshIOLabel (audioInLabel, audioInsVisible);
         refreshIOLabel (audioOutLabel, audioOutsVisible);
+        updateSectionLabels();
 
         for (auto* lab : meterLabels)
             refreshMeterLabel (*lab);
@@ -431,6 +481,7 @@ private:
     OwnedArray<Label> meterLabels, meterOutLabels;
     Label audioInLabel { "audioin", "IN" };
     Label audioOutLabel { "audioout", "OUT" };
+    Label modeLabel;
     bool audioInsVisible = false;
     bool audioOutsVisible = false;
     int meterSize = 18;

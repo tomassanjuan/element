@@ -32,6 +32,7 @@ const char* Settings::systrayKey = "systrayKey";
 const char* Settings::midiOutLatencyKey = "midiOutLatency";
 const char* Settings::desktopScaleKey = "desktopScale";
 const char* Settings::meterColorSchemeKey = "meterColorScheme";
+const char* Settings::bridgeLevelModeKey = "bridgeLevelMode";
 const char* Settings::mainContentTypeKey = "mainContentType";
 const char* Settings::pluginListHeaderKey = "pluginListHeader";
 const char* Settings::devicesKey = "devices";
@@ -404,6 +405,19 @@ void Settings::setMeterColorScheme (int scheme)
 {
     if (auto* p = getProps())
         p->setValue (meterColorSchemeKey, jlimit (0, 1, scheme));
+}
+
+int Settings::getBridgeLevelMode() const
+{
+    if (auto* p = getProps())
+        return p->getIntValue (bridgeLevelModeKey, 0);
+    return 0;
+}
+
+void Settings::setBridgeLevelMode (int mode)
+{
+    if (auto* p = getProps())
+        p->setValue (bridgeLevelModeKey, jlimit (0, 1, mode));
 }
 
 //=============================================================================

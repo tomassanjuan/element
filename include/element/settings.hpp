@@ -42,6 +42,7 @@ public:
     static const char* midiOutLatencyKey;
     static const char* desktopScaleKey;
     static const char* meterColorSchemeKey;
+    static const char* bridgeLevelModeKey;
     static const char* mainContentTypeKey;
     static const char* pluginListHeaderKey;
     static const char* devicesKey;
@@ -126,6 +127,10 @@ public:
     void setDesktopScale (double);
 
     /** Meter color scheme: 0 = original, 1 = standard (green, yellow, red). */
+    /** Meter bridge level mode: 0 = peak, 1 = RMS. */
+    int getBridgeLevelMode() const;
+    void setBridgeLevelMode (int);
+
     int getMeterColorScheme() const;
     void setMeterColorScheme (int);
 

@@ -10,6 +10,7 @@
 #include <element/ui.hpp>
 #include <element/ui/content.hpp>
 #include <element/ui/mainwindow.hpp>
+#include <element/ui/meterbridge.hpp>
 #include <element/ui/preferences.hpp>
 #include <element/ui/simplemeter.hpp>
 #include <element/ui/updater.hpp>
@@ -451,6 +452,15 @@ public:
         meterColorsBox.setSelectedId (settings.getMeterColorScheme() + 1, dontSendNotification);
         meterColorsBox.getSelectedIdAsValue().addListener (this);
 
+        addAndMakeVisible (bridgeModeLabel);
+        bridgeModeLabel.setText ("Meter bridge level", dontSendNotification);
+        bridgeModeLabel.setFont (Font (FontOptions (12.0, Font::bold)));
+        addAndMakeVisible (bridgeModeBox);
+        bridgeModeBox.addItem ("Peak (PK)", 1);
+        bridgeModeBox.addItem ("RMS (matches the channel strips)", 2);
+        bridgeModeBox.setSelectedId (settings.getBridgeLevelMode() + 1, dontSendNotification);
+        bridgeModeBox.getSelectedIdAsValue().addListener (this);
+
         addAndMakeVisible (defaultSessionFileLabel);
         defaultSessionFileLabel.setText ("Default new Session", dontSendNotification);
         defaultSessionFileLabel.setFont (Font (FontOptions (12.0, Font::bold)));
@@ -492,6 +502,7 @@ public:
         clockSource.removeListener (this);
         mainContentBox.getSelectedIdAsValue().removeListener (this);
         meterColorsBox.getSelectedIdAsValue().removeListener (this);
+        bridgeModeBox.getSelectedIdAsValue().removeListener (this);
     }
 
     void filenameComponentChanged (FilenameComponent* f) override
@@ -555,6 +566,11 @@ public:
         r2 = r.removeFromTop (settingHeight);
         meterColorsLabel.setBounds (r2.removeFromLeft (getWidth() / 2));
         meterColorsBox.setBounds (r2.withSizeKeepingCentre (r2.getWidth(), settingHeight));
+
+        r.removeFromTop (spacingBetweenSections);
+        r2 = r.removeFromTop (settingHeight);
+        bridgeModeLabel.setBounds (r2.removeFromLeft (getWidth() / 2));
+        bridgeModeBox.setBounds (r2.withSizeKeepingCentre (r2.getWidth(), settingHeight));
 
 #if ! ELEMENT_SE
         layoutSetting (r, defaultSessionFileLabel, defaultSessionFile, 190 - settingHeight);
@@ -628,6 +644,11 @@ public:
             settings.setMeterColorScheme (meterColorsBox.getSelectedId() - 1);
             SimpleMeter::setColorScheme (static_cast<SimpleMeter::ColorScheme> (settings.getMeterColorScheme()));
         }
+        else if (value.refersToSameSourceAs (bridgeModeBox.getSelectedIdAsValue()))
+        {
+            settings.setBridgeLevelMode (bridgeModeBox.getSelectedId() - 1);
+            MeterBridge::setLevelMode (static_cast<MeterBridge::LevelMode> (settings.getBridgeLevelMode()));
+        }
         else if (value.refersToSameSourceAs (mainContentBox.getSelectedIdAsValue()))
         {
             auto uitype = settings.getMainContentType();
@@ -697,6 +718,9 @@ private:
 
     Label meterColorsLabel;
     ComboBox meterColorsBox;
+
+    Label bridgeModeLabel;
+    ComboBox bridgeModeBox;
 
     Settings& settings;
     AudioEnginePtr engine;
