@@ -226,11 +226,15 @@ public:
         }
         else if (btn == &audioButton)
         {
-            auto& devices = owner.context().devices();
-            if (devices.getCurrentAudioDevice() != nullptr)
-                devices.closeAudioDevice();
+            if (owner.context().devices().getCurrentAudioDevice() != nullptr)
+            {
+                if (auto* const service = owner.services().find<DeviceService>())
+                    service->stopAudio();
+            }
             else
+            {
                 startAudioDevice();
+            }
             updateAudioButton();
         }
     }
@@ -253,7 +257,6 @@ private:
     SettingButton viewBtn;
     SettingButton learnButton;
     SettingButton audioButton;
-    AudioDeviceManager::AudioDeviceSetup lastSetup;
     TempoAndMeterBar tempoBar;
     TransportBar transport;
     IconButton pluginMenu;
@@ -262,16 +265,19 @@ private:
 
     void startAudioDevice()
     {
-        auto& devices = owner.context().devices();
-        const auto error = devices.setAudioDeviceSetup (lastSetup, false);
+        auto* const service = owner.services().find<DeviceService>();
+        if (service == nullptr)
+            return;
+
+        const auto error = service->startAudio();
         updateAudioButton();
-        if (error.isEmpty() && devices.getCurrentAudioDevice() != nullptr)
+        if (error.isEmpty())
             return;
 
         auto options = MessageBoxOptions()
                            .withIconType (MessageBoxIconType::WarningIcon)
                            .withTitle (TRANS ("Audio device unavailable"))
-                           .withMessage (error.isNotEmpty() ? error : TRANS ("The audio device could not be started. It may be in use by another application."))
+                           .withMessage (error)
                            .withButton (TRANS ("Retry"))
                            .withButton (TRANS ("Cancel"));
         AlertWindow::showAsync (options, [safe = SafePointer<Toolbar> (this)] (int result) {
@@ -282,12 +288,10 @@ private:
 
     void updateAudioButton()
     {
-        auto& devices = owner.context().devices();
-        const bool running = devices.getCurrentAudioDevice() != nullptr;
-        if (running)
-            lastSetup = devices.getAudioDeviceSetup();
+        const bool running = owner.context().devices().getCurrentAudioDevice() != nullptr;
+        auto* const service = owner.services().find<DeviceService>();
         audioButton.setToggleState (running, dontSendNotification);
-        audioButton.setEnabled (running || lastSetup.inputDeviceName.isNotEmpty() || lastSetup.outputDeviceName.isNotEmpty());
+        audioButton.setEnabled (running || (service != nullptr && service->canStartAudio()));
         audioButton.setTooltip (running ? TRANS ("Stop the audio engine and release the audio device")
                                         : TRANS ("Start the audio engine"));
     }

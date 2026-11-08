@@ -549,4 +549,55 @@ BOOST_FIXTURE_TEST_CASE (EventDrivenResumeAttemptsOnce, MonitorFixture)
     BOOST_CHECK_EQUAL (backend.openCalls, 1);
 }
 
+BOOST_FIXTURE_TEST_CASE (UserStopDoesNotReconnect, MonitorFixture)
+{
+    seedActive();
+    monitor.stop();
+    BOOST_CHECK_EQUAL (backend.closeCalls, 1);
+    BOOST_CHECK (monitor.status().state == AudioDeviceMonitor::State::inactive);
+
+    // The close broadcasts a change event; neither it nor the poll may reopen.
+    monitor.onChangeEvent();
+    for (int i = 0; i < AudioDeviceMonitor::safetyNetPollTicks * 2; ++i)
+        monitor.onTimerTick();
+    monitor.onHardwareEvent();
+    monitor.onResume();
+    BOOST_CHECK_EQUAL (backend.openCalls, 0);
+    BOOST_CHECK (monitor.status().state == AudioDeviceMonitor::State::inactive);
+    BOOST_CHECK (monitor.canStart());
+}
+
+BOOST_FIXTURE_TEST_CASE (UserStartReopensSavedSetup, MonitorFixture)
+{
+    seedActive();
+    monitor.stop();
+
+    BOOST_CHECK (monitor.start().isEmpty());
+    BOOST_CHECK_EQUAL (backend.openCalls, 1);
+    BOOST_CHECK (monitor.status().state == AudioDeviceMonitor::State::active);
+    BOOST_CHECK_EQUAL (monitor.status().deviceName.toStdString(), "Test Device");
+}
+
+BOOST_FIXTURE_TEST_CASE (UserStartFailureStaysInactive, MonitorFixture)
+{
+    seedActive();
+    monitor.stop();
+    backend.openError = "in use";
+
+    BOOST_CHECK_EQUAL (monitor.start().toStdString(), "in use");
+    BOOST_CHECK (monitor.status().state == AudioDeviceMonitor::State::inactive);
+
+    for (int i = 0; i < AudioDeviceMonitor::reconnectPollTicks * 2; ++i)
+        monitor.onTimerTick();
+    BOOST_CHECK_EQUAL (backend.openCalls, 1);
+}
+
+BOOST_FIXTURE_TEST_CASE (UserStartWithoutSetupFails, MonitorFixture)
+{
+    monitor.seed (nullptr);
+    BOOST_CHECK (! monitor.canStart());
+    BOOST_CHECK (monitor.start().isNotEmpty());
+    BOOST_CHECK_EQUAL (backend.openCalls, 0);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

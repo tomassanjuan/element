@@ -126,28 +126,52 @@ void AudioDeviceMonitor::attemptRestore()
         return;
     }
 
+    juce::String error;
+    if (! openDesired (error))
+        setState (State::waiting, desiredDisplayName());
+}
+
+bool AudioDeviceMonitor::openDesired (juce::String& error)
+{
     restoring = true;
-    const auto error = backend.attemptOpenDesired (*desiredXml);
+    error = backend.attemptOpenDesired (*desiredXml);
     restoring = false;
 
-    if (error.isEmpty() && backend.currentDevice().open)
+    if (error.isNotEmpty() || ! backend.currentDevice().open)
+        return false;
+
+    // The device may have reopened with adjusted parameters (e.g. an
+    // unsupported sample rate); resync without touching saved settings.
+    if (auto xml = backend.stateXml())
     {
-        // The device may have reopened with adjusted parameters (e.g. an
-        // unsupported sample rate); resync without touching saved settings.
-        if (auto xml = backend.stateXml())
-        {
-            desiredXml = std::move (xml);
-            parseDesired();
-        }
-        lastTicks = backend.ioTicks();
-        staleCount = 0;
-        fastRetries = retryCooldown = 0;
-        setState (State::active, desiredDisplayName());
+        desiredXml = std::move (xml);
+        parseDesired();
     }
-    else
-    {
-        setState (State::waiting, desiredDisplayName());
-    }
+    lastTicks = backend.ioTicks();
+    staleCount = 0;
+    fastRetries = retryCooldown = 0;
+    setState (State::active, desiredDisplayName());
+    return true;
+}
+
+void AudioDeviceMonitor::stop()
+{
+    if (backend.currentDevice().open)
+        backend.closeDevice();
+    setState (State::inactive, {});
+}
+
+juce::String AudioDeviceMonitor::start()
+{
+    if (desiredXml == nullptr || ! hasDesired())
+        return "No audio device is configured.";
+
+    juce::String error;
+    if (openDesired (error))
+        return {};
+
+    setState (State::inactive, {});
+    return error.isNotEmpty() ? error : "The audio device could not be started.";
 }
 
 void AudioDeviceMonitor::onChangeEvent()
