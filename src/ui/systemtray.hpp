@@ -15,6 +15,7 @@ public:
 
     void mouseDown (const MouseEvent&) override;
     void mouseUp (const MouseEvent&) override;
+    void mouseDoubleClick (const MouseEvent&) override;
 
 private:
     SystemTray();
