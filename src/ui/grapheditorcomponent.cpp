@@ -126,23 +126,35 @@ public:
     ConnectorComponent (const Node& g)
         : sourceFilterID (0), destFilterID (0), sourceFilterChannel (0), destFilterChannel (0), graph (g), lastInputX (0), lastInputY (0), lastOutputX (0), lastOutputY (0)
     {
-        startTimerHz (15);
+        startTimerHz (25);
     }
 
     ~ConnectorComponent() {}
 
     /** Cable colour for a linear RMS level, using the same +3 dB calibration as the meters.
-        Grey = silence, blue = very low, green = normal, red = at or near 0 dB. */
+        Grey = silence, then blue (very low) blending through green and yellow to red (0 dB).
+        Snapped to 2 dB steps so tiny level changes don't repaint the cable. */
     static Colour colourForLevel (float rms)
     {
-        const float db = rms > 0.0f ? Decibels::gainToDecibels (rms) + 3.0103f : -100.0f;
+        const float db = rms > 0.0f ? std::round ((Decibels::gainToDecibels (rms) + 3.0103f) * 0.5f) * 2.0f : -100.0f;
         if (db < -80.0f)
             return Colours::grey;
-        if (db < -40.0f)
-            return Colour (0xff2196f3);
-        if (db < -1.0f)
-            return Colour (0xff4caf50);
-        return Colour (0xfff44336);
+
+        struct Stop { float db; Colour colour; };
+        static const Stop stops[] = {
+            { -80.0f, Colour (0xff2196f3) }, // blue
+            { -40.0f, Colour (0xff4caf50) }, // green
+            { -18.0f, Colour (0xff4caf50) }, // green
+            { -8.0f, Colour (0xffffeb3b) },  // yellow
+            { 0.0f, Colour (0xfff44336) },   // red
+        };
+
+        for (size_t i = 1; i < std::size (stops); ++i)
+            if (db < stops[i].db)
+                return stops[i - 1].colour.interpolatedWith (
+                    stops[i].colour, (db - stops[i - 1].db) / (stops[i].db - stops[i - 1].db));
+
+        return stops[std::size (stops) - 1].colour;
     }
 
     bool isDragging() const { return dragging; }
@@ -247,7 +259,7 @@ public:
         // when disabled, idle at 1 Hz just to notice the setting being turned back on
         auto* globals = ViewHelpers::getGlobals (this);
         const bool enabled = globals != nullptr && globals->settings().isCableLevelColorsEnabled();
-        startTimer (enabled ? 66 : 1000);
+        startTimer (enabled ? 40 : 1000);
 
         std::optional<Colour> next;
         if (enabled && sourceFilterID != 0 && sourceFilterID != EL_INVALID_PORT)
