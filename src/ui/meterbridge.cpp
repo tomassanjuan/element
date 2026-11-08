@@ -226,6 +226,10 @@ public:
     {
         bridge.addAndMakeVisible (audioInLabel);
         bridge.addAndMakeVisible (audioOutLabel);
+        bridge.addAndMakeVisible (modeLabel);
+        modeLabel.setInterceptsMouseClicks (false, false);
+        modeLabel.setJustificationType (Justification::centred);
+        modeLabel.setFont (Font (FontOptions (9.4f)));
         levelModeBroadcaster().addChangeListener (this);
     }
 
@@ -238,13 +242,12 @@ public:
 
     void updateSectionLabels()
     {
-        const String hint = vuStyle ? "Meter level: " + String (sLevelMode == LevelMode::RMS ? "RMS" : "Peak") : String();
         audioInLabel.setText ("IN", dontSendNotification);
         audioOutLabel.setText ("OUT", dontSendNotification);
         audioInLabel.setJustificationType (Justification::centred);
         audioOutLabel.setJustificationType (Justification::centred);
-        audioInLabel.setTooltip (hint);
-        audioOutLabel.setTooltip (hint);
+        modeLabel.setText (sLevelMode == LevelMode::RMS ? "RMS" : "Peak", dontSendNotification);
+        modeLabel.setVisible (vuStyle);
     }
 
     int sectionPadding() { return 6; }
@@ -304,11 +307,13 @@ public:
     {
         fitMeters();
         const int labSize = 15;
+        const int modeHeight = vuStyle ? 12 : 0;
+        modeLabel.setBounds (0, bridge.getHeight() - modeHeight - 3, bridge.getWidth(), modeHeight);
         auto r = bridge.getLocalBounds()
                      .reduced (0, 3)
                      .withWidth (drawTotalSpace());
         r.removeFromTop (4);
-        r.removeFromBottom (4);
+        r.removeFromBottom (4 + modeHeight);
         if (audioInsVisible && ! audioOutsVisible)
         {
             auto r1 = r.removeFromTop (labSize);
@@ -504,6 +509,7 @@ private:
     OwnedArray<Label> meterLabels, meterOutLabels;
     Label audioInLabel { "audioin", "IN" };
     Label audioOutLabel { "audioout", "OUT" };
+    Label modeLabel;
     bool audioInsVisible = false;
     bool audioOutsVisible = false;
     int meterSize = 18;
