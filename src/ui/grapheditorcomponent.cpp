@@ -126,7 +126,7 @@ public:
     ConnectorComponent (const Node& g)
         : sourceFilterID (0), destFilterID (0), sourceFilterChannel (0), destFilterChannel (0), graph (g), lastInputX (0), lastInputY (0), lastOutputX (0), lastOutputY (0)
     {
-        startTimerHz (25);
+        startTimerHz (15);
     }
 
     ~ConnectorComponent() {}
@@ -259,7 +259,7 @@ public:
         // when disabled, idle at 1 Hz just to notice the setting being turned back on
         auto* globals = ViewHelpers::getGlobals (this);
         const bool enabled = globals != nullptr && globals->settings().isCableLevelColorsEnabled();
-        startTimer (enabled ? 40 : 1000);
+        startTimer (enabled ? 66 : 1000);
 
         std::optional<Colour> next;
         if (enabled && sourceFilterID != 0 && sourceFilterID != EL_INVALID_PORT)
