@@ -60,6 +60,12 @@ ChannelStripComponent::ChannelStripComponent()
     name.setJustificationType (Justification::centred);
     name.setText ("Name", dontSendNotification);
 
+    addAndMakeVisible (levelLabel);
+    levelLabel.setFont (levelLabel.getFont().withHeight (10));
+    levelLabel.setJustificationType (Justification::centred);
+    levelLabel.setTooltip ("Meter level (dB)");
+    levelLabel.setInterceptsMouseClicks (false, false);
+
     addAndMakeVisible (mute);
     mute.setColour (SettingButton::backgroundOnColourId, Colors::toggleBlue);
     mute.setButtonText ("M");
@@ -113,6 +119,7 @@ void ChannelStripComponent::resized()
 
     r1.removeFromTop (4);
     volume.setBounds (r1.removeFromTop (18).withSizeKeepingCentre (30, 18));
+    levelLabel.setBounds (r1.removeFromTop (14).withSizeKeepingCentre (30, 14));
     r1.removeFromBottom (4);
 
     for (auto* const button : extraButtons)

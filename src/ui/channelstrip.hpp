@@ -29,6 +29,13 @@ public:
 
     inline double getVolume() const { return fader.getValue(); }
 
+    /** Shows the current meter level, in decibels, below the gain value. */
+    inline void setLevelDb (float dB)
+    {
+        levelLabel.setText (dB <= -60.f ? juce::String ("-inf") : juce::String (dB, 1),
+                            juce::dontSendNotification);
+    }
+
     inline void setPower (const bool powerOn, const bool notify = true)
     {
         if (powerOn == mute.getToggleState())
@@ -88,6 +95,7 @@ private:
     SimpleMeter meter;
     DecibelScale scale;
     Label name;
+    Label levelLabel;
     struct FaderStyle;
     std::unique_ptr<FaderStyle> _fstyle;
 

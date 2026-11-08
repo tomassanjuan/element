@@ -115,26 +115,35 @@ public:
         auto& meter = channelStrip.getSimpleMeter();
         if (ProcessorPtr ptr = node.getObject())
         {
+            float level = 0.f;
+            auto feed = [&meter, &level] (int port, float value) {
+                meter.setValue (port, value);
+                level = jmax (level, value);
+            };
+
             const int startChannel = jmax (0, channelBox.getSelectedId() - 1);
             if (ptr->getNumAudioOutputs() == 1)
             {
                 if (isAudioOutNode)
                     for (int c = 0; c < 2; ++c)
-                        meter.setValue (c, ptr->getInputRMS (startChannel));
+                        feed (c, ptr->getInputRMS (startChannel));
                 else
                     for (int c = 0; c < 2; ++c)
-                        meter.setValue (c, ptr->getOutputRMS (startChannel));
+                        feed (c, ptr->getOutputRMS (startChannel));
             }
             else
             {
                 const int endChannel = startChannel + 2;
                 if (isAudioOutNode || isMonitoringInputs())
                     for (int c = startChannel; c < endChannel; ++c)
-                        meter.setValue (c - startChannel, ptr->getInputRMS (c));
+                        feed (c - startChannel, ptr->getInputRMS (c));
                 else
                     for (int c = startChannel; c < endChannel; ++c)
-                        meter.setValue (c - startChannel, ptr->getOutputRMS (c));
+                        feed (c - startChannel, ptr->getOutputRMS (c));
             }
+
+            // same +3 dB RMS calibration as SimpleMeter, so the number matches the meter
+            channelStrip.setLevelDb (Decibels::gainToDecibels (level, -100.f) + 3.0103f);
 
             const auto cv = getCurrentVolume();
             if (static_cast<float> (channelStrip.getVolume()) != cv)
@@ -147,6 +156,7 @@ public:
         else
         {
             meter.resetPeaks();
+            channelStrip.setLevelDb (-60.f);
             stopTimer();
         }
 
