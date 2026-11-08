@@ -927,6 +927,9 @@ void BlockComponent::paint (Graphics& g)
         }
     }
 
+    if (latencyHint.text.isNotEmpty())
+        subName = subName.isEmpty() ? latencyHint.text : subName + " · " + latencyHint.text;
+
     auto normalTextColor = node.isMissing() ? Colors::toggleRed : Colours::black;
     if (colorize && ! node.isMissing())
         normalTextColor = Colours::white.overlaidWith (color).contrasting();
@@ -986,13 +989,6 @@ void BlockComponent::paint (Graphics& g)
                 break;
             }
         }
-    }
-
-    if (latencyHint.text.isNotEmpty() && displayMode != Compact)
-    {
-        g.setColour (normalTextColor.withAlpha (0.75f));
-        g.setFont (Font (FontOptions (8.f)));
-        g.drawText (latencyHint.text, box.reduced (4, 9), Justification::bottomRight, false);
     }
 
     if (mouseInCornerResize)
