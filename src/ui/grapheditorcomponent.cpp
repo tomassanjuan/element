@@ -126,17 +126,17 @@ public:
     ConnectorComponent (const Node& g)
         : sourceFilterID (0), destFilterID (0), sourceFilterChannel (0), destFilterChannel (0), graph (g), lastInputX (0), lastInputY (0), lastOutputX (0), lastOutputY (0)
     {
-        startTimerHz (15);
+        startTimerHz (10);
     }
 
     ~ConnectorComponent() {}
 
-    /** Cable colour for a linear RMS level, using the same +3 dB calibration as the meters.
+    /** Cable colour for a linear peak level.
         Grey = silence, then blue (very low) blending through green and yellow to red (0 dB).
         Snapped to 2 dB steps so tiny level changes don't repaint the cable. */
-    static Colour colourForLevel (float rms)
+    static Colour colourForLevel (float peak)
     {
-        const float db = rms > 0.0f ? std::round ((Decibels::gainToDecibels (rms) + 3.0103f) * 0.5f) * 2.0f : -100.0f;
+        const float db = peak > 0.0f ? std::round (Decibels::gainToDecibels (peak) * 0.5f) * 2.0f : -100.0f;
         if (db < -80.0f)
             return Colours::grey;
 
@@ -259,7 +259,7 @@ public:
         // when disabled, idle at 1 Hz just to notice the setting being turned back on
         auto* globals = ViewHelpers::getGlobals (this);
         const bool enabled = globals != nullptr && globals->settings().isCableLevelColorsEnabled();
-        startTimer (enabled ? 66 : 1000);
+        startTimer (enabled ? 100 : 1000);
 
         std::optional<Colour> next;
         if (enabled && sourceFilterID != 0 && sourceFilterID != EL_INVALID_PORT)
@@ -267,7 +267,7 @@ public:
             if (ProcessorPtr src = graph.getNodeById (sourceFilterID).getObject())
             {
                 if (src->getPortType ((uint32) sourceFilterChannel) == PortType::Audio)
-                    next = colourForLevel (src->getOutputRMS (src->getChannelPort ((uint32) sourceFilterChannel)));
+                    next = colourForLevel (src->getOutputPeak (src->getChannelPort ((uint32) sourceFilterChannel)));
             }
         }
 

@@ -448,7 +448,7 @@ public:
         lastMute = muted;
 
         for (int i = 0; i < numAudioOuts; ++i)
-            node->setOutputRMS (i, buffer.getRMSLevel (i, 0, numSamples), numSamples);
+            node->setOutputRMS (i, buffer.getRMSLevel (i, 0, numSamples), numSamples, buffer.getMagnitude (i, 0, numSamples));
     }
 
     const ProcessorPtr node;

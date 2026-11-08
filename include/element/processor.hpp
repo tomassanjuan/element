@@ -273,8 +273,11 @@ public:
 
     void setInputRMS (int chan, float rms, int numSamples);
     float getInputRMS (int chan) const { return (chan < inRMS.size()) ? inRMS.getUnchecked (chan)->value.get() : 0.0f; }
-    void setOutputRMS (int chan, float rms, int numSamples);
+    void setOutputRMS (int chan, float rms, int numSamples, float blockPeak);
     float getOutputRMS (int chan) const { return (chan < outRMS.size()) ? outRMS.getUnchecked (chan)->value.get() : 0.0f; }
+
+    /** Linear peak of an output channel, falling with a ~0.25 s time constant. */
+    float getOutputPeak (int chan) const { return (chan < outRMS.size()) ? outRMS.getUnchecked (chan)->peak.get() : 0.0f; }
 
     //=========================================================================
     /** Connect this node's output audio to another node's input audio */
@@ -568,6 +571,7 @@ private:
     struct RMSMeter {
         float meanSquare = 0.0f;  // running mean-square, audio thread only
         AtomicValue<float> value; // smoothed linear RMS handed to the UI thread
+        AtomicValue<float> peak;  // linear peak with a fall time, written by the audio thread
     };
     juce::OwnedArray<RMSMeter> inRMS, outRMS;
 
