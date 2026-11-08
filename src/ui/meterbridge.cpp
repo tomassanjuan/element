@@ -147,8 +147,13 @@ struct VuLevelMeter : public Component,
         g.fillRect (box);
 
         g.setColour (Colours::white);
-        g.setFont (Font (FontOptions (getWidth() >= 24 ? 11.f : 10.f, Font::bold)));
-        g.drawFittedText (levelText, box, Justification::centred, 1, 0.6f);
+        float size = 11.f;
+        Font font (FontOptions (size, Font::bold));
+        while (size > 6.f && GlyphArrangement::getStringWidthInt (font, levelText) > box.getWidth() - 4)
+            font = Font (FontOptions (size -= 0.5f, Font::bold));
+
+        g.setFont (font);
+        g.drawText (levelText, box, Justification::centred, false);
     }
 
     void mouseDown (const MouseEvent&) override
