@@ -106,12 +106,21 @@ public:
     {
         g.setColour (Colors::widgetBackgroundColor);
         g.fillAll();
+
+        if (! nodeColour.isTransparent())
+        {
+            g.setColour (nodeColour);
+            g.fillRect (getLocalBounds().removeFromTop (22));
+        }
+
         g.setColour (Colors::contentBackgroundColor);
         g.drawLine (getWidth() - 1.f, 0.0, getWidth() - 1.f, getHeight());
     }
 
     inline void timerCallback() override
     {
+        updateNodeColour();
+
         auto& meter = channelStrip.getSimpleMeter();
         if (ProcessorPtr ptr = node.getObject())
         {
@@ -266,6 +275,7 @@ private:
     [[maybe_unused]] bool monoMeter = false;
 
     Value displayName;
+    Colour nodeColour { Colours::transparentBlack };
 
     SignalConnection nodeSelectedConnection;
     SignalConnection volumeChangedConnection;
@@ -281,6 +291,22 @@ private:
     {
         if (value.refersToSameSourceAs (displayName))
             updateNodeName();
+    }
+
+    /** Tints the title bar with the node's block color, if it has one. */
+    void updateNodeColour()
+    {
+        const auto colour = node.isValid() ? node.getColor (Colours::transparentBlack)
+                                           : Colours::transparentBlack;
+        if (colour == nodeColour)
+            return;
+
+        nodeColour = colour;
+        if (nodeColour.isTransparent())
+            nodeName.removeColour (Label::textColourId);
+        else
+            nodeName.setColour (Label::textColourId, nodeColour.contrasting (1.f));
+        repaint();
     }
 
     void updateNodeName()
