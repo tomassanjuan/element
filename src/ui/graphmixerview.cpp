@@ -4,6 +4,7 @@
 #include <element/services.hpp>
 #include <element/ui/style.hpp>
 #include <element/ui/meterbridge.hpp>
+#include <element/ui/standard.hpp>
 
 #include "ui/nodechannelstrip.hpp"
 #include "ui/graphmixerview.hpp"
@@ -287,6 +288,7 @@ public:
         meterToggle.onClick = [this]() {
             sShowMixerMeterBridge = meterToggle.getToggleState();
             resized();
+            updateBottomBridge();
         };
         box.setRowHeight (80);
         model.reset (new GraphMixerListBoxModel (gui, box));
@@ -301,8 +303,24 @@ public:
         }));
     }
 
+    /** While the mixer shows its own meter bridge, the bottom one is collapsed. */
+    void updateBottomBridge()
+    {
+        if (auto* found = findParentComponentOfClass<StandardContent>())
+            standard = found;
+
+        if (standard != nullptr)
+            standard->setMeterBridgeSuppressed (isShowing() && sShowMixerMeterBridge);
+    }
+
+    void parentHierarchyChanged() override { updateBottomBridge(); }
+    void visibilityChanged() override { updateBottomBridge(); }
+
     ~Content()
     {
+        if (standard != nullptr)
+            standard->setMeterBridgeSuppressed (false);
+
         for (auto& c : _conns)
             c.disconnect();
         _conns.clear();
@@ -360,6 +378,7 @@ private:
     HorizontalListBox box;
     MeterBridgeView meterView;
     TextButton meterToggle { "VU" };
+    Component::SafePointer<StandardContent> standard;
     std::vector<SignalConnection> _conns;
 };
 

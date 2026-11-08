@@ -293,10 +293,17 @@ private:
             g.fillAll (Colours::black);
         }
 
+        bool bridgeSuppressed = false;
+
+        bool showBridge() const { return bridge->isVisible() && ! bridgeSuppressed; }
+
         void resized() override
         {
             auto r = getLocalBounds();
-            if (keyboard->isVisible() && bridge->isVisible())
+            if (! showBridge())
+                bridge->setBounds ({});
+
+            if (keyboard->isVisible() && showBridge())
             {
                 keyboard->setBounds (r.removeFromBottom (80));
                 r.removeFromBottom (1);
@@ -304,15 +311,15 @@ private:
             }
             else if (keyboard->isVisible())
                 keyboard->setBounds (r.removeFromBottom (80));
-            else if (bridge->isVisible())
+            else if (showBridge())
                 bridge->setBounds (r.removeFromBottom (80));
         }
 
         int requiredHeight()
         {
             int h = keyboard->isVisible() ? 80 : 0;
-            h += (bridge->isVisible() ? 80 : 0);
-            if (keyboard->isVisible() && bridge->isVisible())
+            h += (showBridge() ? 80 : 0);
+            if (keyboard->isVisible() && showBridge())
                 h += 1;
             return h;
         }
@@ -1347,6 +1354,15 @@ void StandardContent::setMeterBridgeVisible (bool vis)
 bool StandardContent::isMeterBridgeVisible() const
 {
     return container->bottom->bridge->isVisible();
+}
+
+void StandardContent::setMeterBridgeSuppressed (bool suppressed)
+{
+    if (container->bottom->bridgeSuppressed == suppressed)
+        return;
+    container->bottom->bridgeSuppressed = suppressed;
+    container->bottom->resized();
+    container->resized();
 }
 
 } // namespace element

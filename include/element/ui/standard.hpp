@@ -57,6 +57,12 @@ public:
     void setMeterBridgeVisible (bool);
     bool isMeterBridgeVisible() const;
 
+    /** Collapses the bottom meter bridge without changing its visible setting.
+
+        Used while another view shows its own meter bridge.
+    */
+    void setMeterBridgeSuppressed (bool);
+
     void setCurrentNode (const Node& node) override;
 
     void stabilize (const bool refreshDataPathTrees = false) override;
