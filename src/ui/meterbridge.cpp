@@ -226,10 +226,6 @@ public:
     {
         bridge.addAndMakeVisible (audioInLabel);
         bridge.addAndMakeVisible (audioOutLabel);
-        bridge.addAndMakeVisible (modeLabel);
-        modeLabel.setInterceptsMouseClicks (false, false);
-        modeLabel.setJustificationType (Justification::centred);
-        modeLabel.setFont (Font (FontOptions (9.4f)));
         levelModeBroadcaster().addChangeListener (this);
     }
 
@@ -242,18 +238,13 @@ public:
 
     void updateSectionLabels()
     {
-        const String mode = ! vuStyle ? String() : (sLevelMode == LevelMode::RMS ? "RMS" : "Peak");
-
-        // With both sections shown the mode sits between IN and OUT.
-        const bool both = audioInsVisible && audioOutsVisible && mode.isNotEmpty();
-        const String suffix = (! both && mode.isNotEmpty()) ? " " + mode : String();
-        audioInLabel.setText ("IN" + suffix, dontSendNotification);
-        audioOutLabel.setText ("OUT" + suffix, dontSendNotification);
-        audioInLabel.setJustificationType (both ? Justification::centredLeft : Justification::centred);
-        audioOutLabel.setJustificationType (both ? Justification::centredRight : Justification::centred);
-
-        modeLabel.setText (both ? mode : String(), dontSendNotification);
-        modeLabel.setVisible (both);
+        const String hint = vuStyle ? "Meter level: " + String (sLevelMode == LevelMode::RMS ? "RMS" : "Peak") : String();
+        audioInLabel.setText ("IN", dontSendNotification);
+        audioOutLabel.setText ("OUT", dontSendNotification);
+        audioInLabel.setJustificationType (Justification::centred);
+        audioOutLabel.setJustificationType (Justification::centred);
+        audioInLabel.setTooltip (hint);
+        audioOutLabel.setTooltip (hint);
     }
 
     int sectionPadding() { return 6; }
@@ -383,7 +374,6 @@ public:
             r.setX (bridge.getWidth() / 2 - totalSpace / 2);
             r2.setX (r.getX());
             r1.setX (r.getX());
-            modeLabel.setBounds (r1.withWidth (totalSpace));
             r1.setWidth (drawSpaceRequired (true));
             audioInLabel.setBounds (r1);
 
@@ -514,7 +504,6 @@ private:
     OwnedArray<Label> meterLabels, meterOutLabels;
     Label audioInLabel { "audioin", "IN" };
     Label audioOutLabel { "audioout", "OUT" };
-    Label modeLabel;
     bool audioInsVisible = false;
     bool audioOutsVisible = false;
     int meterSize = 18;
