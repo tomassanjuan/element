@@ -385,7 +385,7 @@ public:
         ScopedNoDenormals denormals;
 
         for (int c = 0; c < numInputChannels; ++c)
-            inMeters.getObjectPointerUnchecked (c)->updateLevel (inputChannelData, c, numSamples, sampleRate);
+            inMeters.getObjectPointerUnchecked (c)->updateLevel (inputChannelData, c, numSamples);
 
         if (numInputChannels > numOutputChannels)
         {
@@ -447,7 +447,7 @@ public:
         }
 
         for (int c = 0; c < numOutputChannels; ++c)
-            outMeters.getObjectPointerUnchecked (c)->updateLevel (outputChannelData, c, numSamples, sampleRate);
+            outMeters.getObjectPointerUnchecked (c)->updateLevel (outputChannelData, c, numSamples);
     }
 
     void processCurrentGraph (AudioBuffer<float>& buffer, MidiBuffer& midi)
@@ -1054,14 +1054,13 @@ AudioEngine::LevelMeterPtr AudioEngine::getLevelMeter (int channel, bool input)
     return larr[channel];
 }
 
-void AudioEngine::LevelMeter::updateLevel (const float* const* channelData, int numChannels, int numSamples, double sampleRate) noexcept
+void AudioEngine::LevelMeter::updateLevel (const float* const* channelData, int numChannels, int numSamples) noexcept
 {
     if (getReferenceCount() <= 1)
         return;
 
     auto localLevel = _level.get();
-    auto ms = _meanSquare.get();
-    const float msCoeff = (float) (1.0 / (0.3 * jmax (1.0, sampleRate)));
+    float sumSquares = 0;
 
     if (numChannels >= 0)
     {
@@ -1070,7 +1069,7 @@ void AudioEngine::LevelMeter::updateLevel (const float* const* channelData, int 
             float s = 0;
 
             s += std::abs (channelData[numChannels][j]);
-            ms += (s * s - ms) * msCoeff;
+            sumSquares += s * s;
 
             // s /= (float) numChannels;
 
@@ -1087,11 +1086,10 @@ void AudioEngine::LevelMeter::updateLevel (const float* const* channelData, int 
     else
     {
         localLevel = 0;
-        ms = 0;
     }
 
     _level.set (localLevel);
-    _meanSquare.set (ms);
+    _meanSquare.set (numSamples > 0 ? sumSquares / (float) numSamples : 0.f);
 }
 
 } // namespace element

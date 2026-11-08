@@ -166,7 +166,7 @@ struct VuLevelMeter : public Component,
         const float raw = (float) levelMeter->level();
         const bool rmsMode = MeterBridge::getLevelMode() == MeterBridge::LevelMode::RMS;
 
-        // RMS uses the strips' 0.3 s window and +3 dB sine calibration. Peak is
+        // RMS uses the last block's RMS and a +3 dB sine calibration. Peak is
         // scaled by 1/sqrt(2) so SimpleMeter's +3 dB cancels and full scale reads 0 dB.
         const float level = rmsMode ? (float) levelMeter->rms() * 1.41421356f : raw;
         meter.setValue (0, level * 0.70710678f);
