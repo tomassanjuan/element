@@ -277,6 +277,7 @@ public:
         addAndMakeVisible (meterView);
         meterView.initializeView (gui.services());
         meterView.didBecomeActive();
+        meterView.meterBridge().setVuStyle (true);
         meterView.onConfigChanged = [this]() { resized(); };
 
         addAndMakeVisible (meterToggle);

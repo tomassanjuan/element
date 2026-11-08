@@ -30,6 +30,9 @@ public:
     int meterSize() const;
     void setMeterSize (int);
 
+    /** Draw the meters like the channel strip VU meters instead of segments. */
+    void setVuStyle (bool);
+
     /** Width needed to show all currently visible meters. */
     int preferredWidth() const;
 

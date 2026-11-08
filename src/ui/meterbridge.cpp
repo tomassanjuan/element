@@ -7,6 +7,7 @@
 #include <element/devices.hpp>
 
 #include <element/ui/style.hpp>
+#include <element/ui/simplemeter.hpp>
 
 using namespace juce;
 
@@ -112,6 +113,37 @@ struct SimpleLevelMeter : public Component,
     int totalBlocks = 7;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SimpleLevelMeter)
+};
+
+/** Bridge meter drawn like the channel strip VU meters (IEC dB scale). */
+struct VuLevelMeter : public Component,
+                      public Timer
+{
+    VuLevelMeter (AudioEnginePtr e, int channel, bool input)
+        : meter (1, false)
+    {
+        levelMeter = e->getLevelMeter (channel, input);
+        addAndMakeVisible (meter);
+        startTimerHz (20);
+    }
+
+    void resized() override { meter.setBounds (getLocalBounds()); }
+
+    void timerCallback() override
+    {
+        if (! isShowing())
+            return;
+
+        // The engine level is a decaying peak. SimpleMeter expects RMS and adds
+        // +3 dB for it, so scale by 1/sqrt(2) to make full scale read 0 dB.
+        meter.setValue (0, (float) levelMeter->level() * 0.70710678f);
+        meter.refresh();
+    }
+
+    SimpleMeter meter;
+    AudioEngine::LevelMeterPtr levelMeter;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (VuLevelMeter)
 };
 
 class MeterBridge::Impl : public juce::ChangeListener
@@ -282,17 +314,23 @@ public:
         metersOut.clear();
         meterOutLabels.clear();
 
+        const auto makeMeter = [this] (int channel, bool input) -> Component* {
+            if (vuStyle)
+                return new VuLevelMeter (engine, channel, input);
+            return new SimpleLevelMeter (engine, channel, input);
+        };
+
         if (audioInsVisible)
             for (int c = 0; c < engine->getNumChannels (true); ++c)
             {
-                bridge.addAndMakeVisible (meters.add (new SimpleLevelMeter (engine, c, true)));
+                bridge.addAndMakeVisible (meters.add (makeMeter (c, true)));
                 bridge.addAndMakeVisible (meterLabels.add (new Label (String (c + 1), String (c + 1))));
             }
 
         if (audioOutsVisible)
             for (int c = 0; c < engine->getNumChannels (false); ++c)
             {
-                bridge.addAndMakeVisible (metersOut.add (new SimpleLevelMeter (engine, c, false)));
+                bridge.addAndMakeVisible (metersOut.add (makeMeter (c, false)));
                 bridge.addAndMakeVisible (meterOutLabels.add (new Label (String (c + 1), String (c + 1))));
             }
 
@@ -340,7 +378,8 @@ private:
     Context* ctx = nullptr;
     MeterBridge& bridge;
     AudioEnginePtr engine;
-    OwnedArray<SimpleLevelMeter> meters, metersOut;
+    OwnedArray<Component> meters, metersOut;
+    bool vuStyle = false;
     OwnedArray<Label> meterLabels, meterOutLabels;
     Label audioInLabel { "audioin", "INS" };
     Label audioOutLabel { "audioout", "OUTS" };
@@ -371,6 +410,15 @@ void MeterBridge::setMeterSize (int newSize)
 {
     newSize = jmax (12, newSize);
     impl->setMeterSizes (newSize, impl->meterSpace);
+}
+
+void MeterBridge::setVuStyle (bool useVuStyle)
+{
+    if (impl->vuStyle == useVuStyle)
+        return;
+    impl->vuStyle = useVuStyle;
+    impl->refresh();
+    resized();
 }
 
 int MeterBridge::preferredWidth() const
