@@ -296,6 +296,8 @@ private:
     bool blockDrag = false;
     bool collapsed = false;
 
+    int snapFeatureX = -1, snapFeatureY = -1;
+    int snapTargetX = 0, snapTargetY = 0;
     int lastDragDeltaX = 0;
     int lastDragDeltaY = 0;
 

@@ -586,6 +586,7 @@ void BlockComponent::mouseDown (const MouseEvent& e)
 
     originalPos = localPointToGlobal (Point<int>());
     originalBounds = getBounds();
+    snapFeatureX = snapFeatureY = -1;
     toFront (true);
     dragging = false;
     auto* const panel = getGraphPanel();
@@ -711,11 +712,11 @@ void BlockComponent::mouseDrag (const MouseEvent& e)
     if (panel != nullptr && ! e.mods.isAltDown())
     {
         constexpr int snapDistance = 8;
-        int bestDx = snapDistance + 1, bestDy = snapDistance + 1;
-        int snapDx = 0, snapDy = 0;
+        constexpr int releaseDistance = 16;
 
         const int xs[] = { pos.x, pos.x + getWidth() / 2, pos.x + getWidth() };
         const int ys[] = { pos.y, pos.y + getHeight() / 2, pos.y + getHeight() };
+        std::vector<std::pair<int, int>> candX, candY; // feature index, target coordinate
 
         for (int i = 0; i < panel->getNumChildComponents(); ++i)
         {
@@ -724,22 +725,41 @@ void BlockComponent::mouseDrag (const MouseEvent& e)
                 continue;
 
             const auto b = other->getBounds();
-            const int bx[] = { b.getX(), b.getCentreX(), b.getRight() };
-            const int by[] = { b.getY(), b.getCentreY(), b.getBottom() };
-
+            const int bx[] = { b.getX(), b.getX() + b.getWidth() / 2, b.getRight() };
+            const int by[] = { b.getY(), b.getY() + b.getHeight() / 2, b.getBottom() };
             for (int k = 0; k < 3; ++k)
             {
-                if (std::abs (bx[k] - xs[k]) < bestDx)
-                    bestDx = std::abs (bx[k] - xs[k]), snapDx = bx[k] - xs[k];
-                if (std::abs (by[k] - ys[k]) < bestDy)
-                    bestDy = std::abs (by[k] - ys[k]), snapDy = by[k] - ys[k];
+                candX.emplace_back (k, bx[k]);
+                candY.emplace_back (k, by[k]);
             }
         }
 
-        if (bestDx <= snapDistance)
-            pos.x += snapDx;
-        if (bestDy <= snapDistance)
-            pos.y += snapDy;
+        // Hold the current target until dragged past releaseDistance so the
+        // block doesn't flip between nearby targets.
+        auto snapAxis = [&] (const int (&f)[3], const auto& cands, int& feature, int& target) {
+            if (feature >= 0 && std::abs (target - f[feature]) <= releaseDistance)
+                return target - f[feature];
+
+            feature = -1;
+            int best = snapDistance + 1;
+            for (auto [k, t] : cands)
+            {
+                if (std::abs (t - f[k]) < best)
+                {
+                    best = std::abs (t - f[k]);
+                    feature = k;
+                    target = t;
+                }
+            }
+            return feature >= 0 ? target - f[feature] : 0;
+        };
+
+        pos.x += snapAxis (xs, candX, snapFeatureX, snapTargetX);
+        pos.y += snapAxis (ys, candY, snapFeatureY, snapTargetY);
+    }
+    else
+    {
+        snapFeatureX = snapFeatureY = -1;
     }
 
     bool hasMoved = false;
