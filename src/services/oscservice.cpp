@@ -6,12 +6,14 @@
 #include <element/context.hpp>
 #include <element/devices.hpp>
 #include <element/settings.hpp>
+#include <element/ui.hpp>
 #include <element/ui/commands.hpp>
 
 #include "services/oscservice.hpp"
 
 #define ELEMENT_OSC_ADDRESS_COMMAND "/element/command"
 #define ELEMENT_OSC_ADDRESS_ENGINE "/element/engine"
+#define ELEMENT_OSC_ADDRESS_GRAPH "/element/graph"
 
 using namespace juce;
 
@@ -92,6 +94,40 @@ private:
 };
 
 //=============================================================================
+/** Handles `/element/graph <index>`: switches the active session graph. */
+struct GraphOSCListener final : OSCReceiver::ListenerWithOSCAddress<>
+{
+    GraphOSCListener (Context& g)
+        : globals (g)
+    {
+    }
+
+    void oscMessageReceived (const juce::OSCMessage& message) override
+    {
+        if (message.isEmpty())
+            return;
+
+        const auto& arg = message[0];
+        int index = -1;
+        if (arg.isInt32())
+            index = arg.getInt32();
+        else if (arg.isFloat32())
+            index = roundToInt (arg.getFloat32());
+        else
+            return;
+
+        // OSC arrives on a network thread; graph changes must run on the message thread.
+        MessageManager::callAsync ([this, index]() {
+            if (auto* gui = globals.services().find<GuiService>())
+                gui->activateGraph (index);
+        });
+    }
+
+private:
+    Context& globals;
+};
+
+//=============================================================================
 class OSCService::Impl
 {
 public:
@@ -141,6 +177,9 @@ public:
         engine.reset (new EngineOSCListener (owner.context()));
         receiver.addListener (engine.get(), ELEMENT_OSC_ADDRESS_ENGINE);
 
+        graph.reset (new GraphOSCListener (owner.context()));
+        receiver.addListener (graph.get(), ELEMENT_OSC_ADDRESS_GRAPH);
+
         listenersReady = true;
     }
 
@@ -152,9 +191,11 @@ public:
 
         receiver.removeListener (application.get());
         receiver.removeListener (engine.get());
+        receiver.removeListener (graph.get());
 
         application.reset();
         engine.reset();
+        graph.reset();
     }
 
     int getHostPort() const { return serverPort; }
@@ -170,6 +211,7 @@ private:
 
     std::unique_ptr<CommandOSCListener> application;
     std::unique_ptr<EngineOSCListener> engine;
+    std::unique_ptr<GraphOSCListener> graph;
 };
 
 //=============================================================================

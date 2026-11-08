@@ -140,11 +140,7 @@ private:
         const auto gp = KeyPress::createFromDescription (g.getProperty (tags::keyMap));
         if (gp.isValid() && key == gp)
         {
-            owner.closeAllPluginWindows (true);
-            auto graphs = session->data().getChildWithName (tags::graphs);
-            graphs.setProperty (tags::active, graphs.indexOf (g.data()), 0);
-            owner.sibling<EngineService>()->setRootNode (g);
-            owner.showPluginWindowsFor (g, true, false, false);
+            owner.activateGraph (session->data().getChildWithName (tags::graphs).indexOf (g.data()));
             return true;
         }
 
@@ -512,6 +508,22 @@ void GuiService::closePluginWindowsFor (uint32 nodeId, const bool visible)
     if (windowManager)
         windowManager->closeOpenPluginWindowsFor (nodeId, visible);
 }
+void GuiService::activateGraph (int index)
+{
+    auto sess = session();
+    if (sess == nullptr || ! juce::isPositiveAndBelow (index, sess->getNumGraphs()))
+        return;
+
+    const auto graph = sess->getGraph (index);
+    if (graph == sess->getActiveGraph())
+        return;
+
+    closeAllPluginWindows (true);
+    sess->setActiveGraph (index);
+    sibling<EngineService>()->setRootNode (graph);
+    showPluginWindowsFor (graph, true, false, false);
+}
+
 void GuiService::closeAllPluginWindows (const bool visible)
 {
     if (windowManager)
