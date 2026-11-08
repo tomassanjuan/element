@@ -4,6 +4,7 @@
 #pragma once
 
 #include <element/juce/gui_basics.hpp>
+#include <element/ui/cliphold.hpp>
 
 namespace element {
 
@@ -27,6 +28,9 @@ public:
 
     void paint (juce::Graphics& g) override;
 
+    /** Clicking the meter clears the held peak and clip state. */
+    void mouseDown (const juce::MouseEvent&) override;
+
     /** @internal */
     void resized() override;
 
@@ -49,6 +53,7 @@ private:
     int peakHold;
     float peakDecay;
     int peakColor;
+    ClipHold clip;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SimpleMeterValue)
 };
 

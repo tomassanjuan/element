@@ -47,6 +47,12 @@ void SimpleMeterValue::setValue (const float newValue)
 void SimpleMeterValue::resetPeak()
 {
     peak = 0;
+    clip.clear();
+}
+
+void SimpleMeterValue::mouseDown (const MouseEvent&)
+{
+    meter->resetPeaks();
 }
 
 void SimpleMeterValue::refresh()
@@ -87,6 +93,12 @@ void SimpleMeterValue::paint (Graphics& g)
     float dB = DIGITAL_METER_MIN_DB;
     if (value > 0.0f)
         dB = 20.0f * log10f (value) + DIGITAL_METER_RMS_CAL_DB;
+
+    // Going over 0 dB turns the peak hold red until 5 s pass without another clip
+    // or the meter is clicked.
+    if (dB > 0.0f)
+        clip.hit();
+    clip.update();
 
     if (dB < DIGITAL_METER_MIN_DB)
         dB = DIGITAL_METER_MIN_DB;
@@ -186,7 +198,7 @@ void SimpleMeterValue::paint (Graphics& g)
         peakDecay = DIGITAL_METER_DECAY_RATE2;
         peakColor = colorLevel;
     }
-    else if (++peakHold > meter->getPeakFalloff())
+    else if (! clip.isClipped() && ++peakHold > meter->getPeakFalloff())
     {
         peak = int (float (peak * peakDecay));
         if (peak < level)
@@ -201,7 +213,7 @@ void SimpleMeterValue::paint (Graphics& g)
         }
     }
 
-    g.setColour (standard ? standardColour (peak) : meter->color (peakColor));
+    g.setColour (clip.isClipped() ? Colours::red : standard ? standardColour (peak) : meter->color (peakColor));
     (vertical) ? g.drawLine (0, h - peak, w, h - peak)
                : g.drawLine (peak, 0, peak, h);
 }
