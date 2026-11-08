@@ -992,7 +992,7 @@ void BlockComponent::paint (Graphics& g)
     {
         g.setColour (normalTextColor.withAlpha (0.75f));
         g.setFont (Font (FontOptions (8.f)));
-        g.drawText (latencyHint.text, box.reduced (4, 2), Justification::bottomRight, false);
+        g.drawText (latencyHint.text, box.reduced (4, 9), Justification::bottomRight, false);
     }
 
     if (mouseInCornerResize)
