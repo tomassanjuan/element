@@ -76,3 +76,47 @@
 ## Comments in Code
 
 - Don't write comments when it is obvious what the code is doing.
+
+---
+
+# Local fork notes (Tomas's Windows build of Element 1.2.0)
+
+Everything below is specific to this checkout, not upstream. It is the working context carried over from the session that created these changes.
+
+## Workflow
+
+- Checkout: `C:\Users\Tomas\Desktop\element-ts`, branch `tom-wip`, based on tag `1.2.0` (`09116740`). Windows 11, MSVC 2022 Build Tools, CMake at `C:\Program Files\CMake\bin\cmake.exe` (not on PATH in the Claude shell, use the full path).
+- Configure once: `cmake -B build -DELEMENT_ENABLE_ASIO=ON`. ASIO must stay on, the user needs it. Boost headers are in `C:\Users\Tomas\SDKs\include\boost` (Boost 1.87, picked up by the CMake fallback).
+- Build: `cmake --build build --config Release --parallel`. Output: `build\element_app_artefacts\Release\element.exe`.
+- Build without asking. After every successful build: close the running Element gracefully (`Get-Process element | % CloseMainWindow`, never force kill, the user may have an unsaved session or a save prompt), copy the exe over `C:\Program Files\Kushview\Element\element.exe`, start it again. Do not make backup copies of exes. If Element is still running after ~10 s, tell the user.
+- Lingering `MSBuild.exe` worker processes hold the folder locked. Stop them before moving or deleting this folder.
+- Format with `util/format.py`. No tests exist for the changes below (all UI/engine glue that needs a live app).
+- This file is tracked by upstream. The section you are reading is local (committed in its own commit on this branch), leave that commit out of anything sent upstream.
+
+## What was done (all verified to compile; user-tested items marked)
+
+Committed (`6b4589f8`):
+- OSC `/element/graph <int|float index>`: `GuiService::activateGraph(int)` (`ui.hpp`, `guiservice.cpp`) holds the steps the per-graph hotkey used to do (close plugin windows, set active, `EngineService::setRootNode`, show windows). Hotkey code and the new `GraphOSCListener` (`oscservice.cpp`) both call it. User-tested, works. Upstream's `/element/command` handler is a no-op, left alone.
+
+Committed after `6b4589f8` as separate commits on this branch (see `git log`), listed here with their state:
+- Minimise to tray with the native title bar: `MainWindow::minimisationStateChanged` (`mainwindow.cpp`), because the native minimise button never reaches `minimiseButtonPressed()`. User-tested, works.
+- Tray icon: single and double click restore the hidden window through `restoreMainWindow()` (`systemtray.cpp`). Upstream's `setVisible(true)` did nothing for a window removed from the desktop. User-tested, works.
+- Global UI zoom: Ctrl+scroll over the main window, Ctrl+=/+/-/0 (`KeyPressManager` in `guiservice.cpp`, `GuiService::adjustUiScale`). Drives the existing "Desktop scale" setting, range 0.5-3.0, saved. Not user-tested yet. (An earlier graph-editor zoom was reverted, the user meant the global one.)
+- Plugin window resize: for hosted `AudioProcessorEditor`s that report `isResizable()`, `PluginWindow` is resizable with a maximise button, and `PluginWindowContent::resized()` stretches the editor to the window (`pluginwindow.cpp`). Root cause: `ResizableWindow::setResizable(false, true)` creates no handle. Not confirmed with FabFilter Q4 yet. If it still fails, ask whether the plugin is VST2 (JUCE reports VST2 as non-resizable) or VST3.
+- Graph mixer (`graphmixerview.cpp`): meter bridge column on the right, VU-style meters, toggled with a "VU" button (state is a file-static, not saved across restarts). While it shows, the bottom meter bridge collapses (`StandardContent::setMeterBridgeSuppressed`). The bottom bridge keeps its original segment look.
+- Channel strips (`channelstrip.*`, `nodechannelstrip.hpp`): dB readout under the gain (calibrated +3.0103 dB to match `SimpleMeter`), title bar tinted with the node's block colour (`Node::getColor`), clip light above the meter, fader double-click resets to 0 dB, Shift while dragging = 0.4x speed (`FaderSlider`). User-tested the readout and tint.
+- Meters (`simplemeter.*`, `cliphold.hpp`): peak hold line turns red when the level goes over 0 dB and clears after 5 s without a clip or on click (`ClipHold`). New Preferences > General "Meter colors": Original, or Standard (green below -6 dB, yellow to 0, red above), stored as `Settings::meterColorScheme` (`SimpleMeter::setColorScheme`).
+- Meter bridge (`meterbridge.*`): labels renamed IN/OUT. In the mixer's VU style each meter has a box on top showing the level in dB that turns red on clipping (click to clear).
+
+## Open jobs
+
+- Menu bar (File/Edit) item highlight is missing. Cause not found: the bar is a standard JUCE `MenuBarComponent`, `LookAndFeel_E1::drawMenuBarItem` (`style_v1.cpp`) delegates to V3/V2, and `PopupMenu::highlightedBackgroundColourId` is set to `Colors::elemental` in the E1 constructor. Need from the user: missing on hover, on click, or both. Probably needs a look at the running app.
+- Commits are one per feature or bugfix. The intermediate commits were derived from the final files and were not compiled one by one, only the branch tip is known to build. The tip's source is identical to the build that is installed (15:24 build of 2026-11-08).
+- Hand-off state: this folder was moved from `C:\Users\Tomas\element`, so `build\` was recreated and re-configured (`-DELEMENT_ENABLE_ASIO=ON`) but no full build has completed here yet. The first build in this folder is a full rebuild of several minutes. Run it, then do the stop/replace/start cycle described under Workflow.
+- Not yet verified by the user: global zoom, plugin resize (Q4), mixer bridge toggle and bottom-bridge collapse, Meter colors option, strip clip light, IN/OUT level box visibility (the earlier text under the meters was not visible, root cause unknown, replaced by the top box).
+- Not done by choice: clip light and level readout on the bottom bridge (user said keep the bottom bridge as it was), persistence of the mixer bridge toggle, unit tests.
+- An empty `C:\Users\Tomas\element` may remain from the folder move, it can be deleted.
+
+## User preferences
+
+- Short, plain replies. Ask only when a decision is really theirs, otherwise pick a sensible default and say so. Say clearly what is verified and what is not.
