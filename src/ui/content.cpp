@@ -409,7 +409,9 @@ public:
         {
             String text = "Sample Rate: ";
             text << String (dev->getCurrentSampleRate() * 0.001, 1) << " KHz";
-            text << ":  Buffer: " << dev->getCurrentBufferSizeSamples();
+            const auto bufSamples = dev->getCurrentBufferSizeSamples();
+            text << ":  Buffer: " << bufSamples << " ("
+                 << String (bufSamples * 1000.0 / jmax (1.0, dev->getCurrentSampleRate()), 1) << " ms)";
             sampleRateLabel.setText (text, dontSendNotification);
 
             text.clear();

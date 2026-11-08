@@ -174,14 +174,37 @@ void BlockComponent::AsyncEmbedInit::timerCallback()
     stopTimer();
 }
 
+void BlockComponent::LatencyHint::timerCallback()
+{
+    String next;
+    if (block.isShowing())
+    {
+        if (const ProcessorPtr p = block.node.getObject())
+        {
+            const int samples = p->getLatencySamples() - p->getDelayCompensationSamples();
+            const double rate = p->getSampleRate();
+            if (samples > 0 && rate > 0.0)
+                next = String (samples * 1000.0 / rate, 1) + " ms";
+        }
+    }
+
+    if (next != text)
+    {
+        text = next;
+        block.repaint();
+    }
+}
+
 //=============================================================================
 BlockComponent::BlockComponent (const Node& graph_, const Node& node_, const bool vertical_)
     : filterID (node_.getNodeId()),
       graph (graph_),
       node (node_),
       font (FontOptions (11.0f)),
-      embedInit (*this)
+      embedInit (*this),
+      latencyHint (*this)
 {
+    latencyHint.startTimer (1000);
     nodeObject = node.getPropertyAsValue (tags::object, true);
     obj = node.getObject();
     jassert (obj != nullptr);
@@ -963,6 +986,13 @@ void BlockComponent::paint (Graphics& g)
                 break;
             }
         }
+    }
+
+    if (latencyHint.text.isNotEmpty() && displayMode != Compact)
+    {
+        g.setColour (normalTextColor.withAlpha (0.75f));
+        g.setFont (Font (FontOptions (9.f)));
+        g.drawText (latencyHint.text, box.reduced (3, 1), Justification::bottomRight, false);
     }
 
     if (mouseInCornerResize)

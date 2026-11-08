@@ -438,6 +438,15 @@ private:
         void timerCallback() override;
     } embedInit;
 
+    /** Polls the processor's own latency (plugins can report it after load). */
+    struct LatencyHint : public juce::Timer
+    {
+        LatencyHint (BlockComponent& b) : block (b) {}
+        BlockComponent& block;
+        juce::String text;
+        void timerCallback() override;
+    } latencyHint;
+
 #if 0
 void itemDragEnter (const SourceDetails& dragSourceDetails);
 void itemDragMove (const SourceDetails& dragSourceDetails);

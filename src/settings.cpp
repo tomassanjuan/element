@@ -443,7 +443,9 @@ void Settings::addItemsToMenu (Context& world, PopupMenu& menu)
         index = 0;
         sub.clear();
         for (const auto bufSize : device->getAvailableBufferSizes())
-            sub.addItem (BufferSize + index++, String (bufSize), true, bufSize == device->getCurrentBufferSizeSamples());
+            sub.addItem (BufferSize + index++,
+                         String (bufSize) + " (" + String (bufSize * 1000.0 / device->getCurrentSampleRate(), 1) + " ms)",
+                         true, bufSize == device->getCurrentBufferSizeSamples());
         menu.addSubMenu ("Buffer Size", sub);
     }
 }
