@@ -68,7 +68,8 @@ struct GlobalLookAndFeel
 };
 
 /** Dispatches global key presses */
-struct GuiService::KeyPressManager : public KeyListener
+struct GuiService::KeyPressManager : public KeyListener,
+                                     public MouseListener
 {
     KeyPressManager (GuiService& g) : owner (g) {}
     ~KeyPressManager() {}
@@ -82,7 +83,40 @@ struct GuiService::KeyPressManager : public KeyListener
         if (! handled)
             handled = handleGraphChange (key, component);
 
+        if (! handled)
+            handled = handleUiScale (key);
+
         return handled;
+    }
+
+    /** Ctrl+scroll over the main window changes the global UI scale. */
+    void mouseWheelMove (const MouseEvent& ev, const MouseWheelDetails& wheel) override
+    {
+        if (! ev.mods.isCommandDown() || wheel.deltaY == 0.f || owner.mainWindow == nullptr)
+            return;
+        if (ev.eventComponent == nullptr || ev.eventComponent->getTopLevelComponent() != owner.mainWindow.get())
+            return;
+        owner.adjustUiScale (wheel.deltaY > 0.f ? uiScaleStep : -uiScaleStep);
+    }
+
+    static constexpr double uiScaleStep = 0.05;
+
+    bool handleUiScale (const KeyPress& key)
+    {
+        if (! key.getModifiers().isCommandDown())
+            return false;
+
+        const auto code = key.getKeyCode();
+        if (code == '=' || code == '+' || code == KeyPress::numberPadAdd)
+            owner.adjustUiScale (uiScaleStep * 2);
+        else if (code == '-' || code == '_' || code == KeyPress::numberPadSubtract)
+            owner.adjustUiScale (-uiScaleStep * 2);
+        else if (code == '0' || code == KeyPress::numberPad0)
+            owner.adjustUiScale (0.0, true);
+        else
+            return false;
+
+        return true;
     }
 
     bool keyStateChanged (bool isKeyDown, Component* component) override
@@ -301,6 +335,7 @@ GuiService::GuiService (Context& w, Services& a)
     factory = std::make_unique<DefaultContentFactory> (w);
     updates = std::make_unique<UpdateManager>();
     keys.reset (new KeyPressManager (*this));
+    Desktop::getInstance().addGlobalMouseListener (keys.get());
     windowManager.reset (new WindowManager (*this));
 
     auto& commands = impl->commands;
@@ -378,6 +413,8 @@ void GuiService::deactivate()
         mainWindow = nullptr;
     }
 
+    if (keys)
+        Desktop::getInstance().removeGlobalMouseListener (keys.get());
     keys = nullptr;
 
     if (windowManager)
@@ -508,6 +545,15 @@ void GuiService::closePluginWindowsFor (uint32 nodeId, const bool visible)
     if (windowManager)
         windowManager->closeOpenPluginWindowsFor (nodeId, visible);
 }
+void GuiService::adjustUiScale (double delta, bool reset)
+{
+    auto& prefs = context().settings();
+    const auto target = reset ? 1.0 : prefs.getDesktopScale() + delta;
+    const auto scale = jlimit (0.5, 3.0, std::round (target * 20.0) / 20.0);
+    prefs.setDesktopScale (scale);
+    Desktop::getInstance().setGlobalScaleFactor ((float) prefs.getDesktopScale());
+}
+
 void GuiService::activateGraph (int index)
 {
     auto sess = session();

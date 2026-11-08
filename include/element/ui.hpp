@@ -74,6 +74,13 @@ public:
                                const bool force = false,
                                const bool focus = false);
 
+    /** Changes the global UI (desktop) scale and saves it in the settings.
+
+        @param delta  Amount to add to the current scale
+        @param reset  If true, ignore delta and go back to 100%
+    */
+    void adjustUiScale (double delta, bool reset = false);
+
     /** Makes a session graph the active graph.
 
         Closes the current plugin windows, switches the audio engine to the graph,
