@@ -1,6 +1,7 @@
 // Copyright 2023 Kushview, LLC <info@kushview.net>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include <element/ui/cliphold.hpp>
 #include <element/ui/decibelscale.hpp>
 #include <element/ui/simplemeter.hpp>
 #include <element/signals.hpp>
@@ -29,11 +30,27 @@ public:
 
     inline double getVolume() const { return fader.getValue(); }
 
-    /** Shows the current meter level, in decibels, below the gain value. */
+    /** Shows the current meter level, in decibels, below the gain value.
+
+        Going over 0 dB lights the clip light, which clears 5 seconds after the
+        last clip.
+    */
     inline void setLevelDb (float dB)
     {
         levelLabel.setText (dB <= -60.f ? juce::String ("-inf") : juce::String (dB, 1),
                             juce::dontSendNotification);
+        if (dB > 0.f)
+            clip.hit();
+        clip.update();
+        clipLight.setLit (clip.isClipped());
+    }
+
+    /** Clears the clip light and the meter's held peaks. */
+    inline void resetClip()
+    {
+        clip.clear();
+        clipLight.setLit (false);
+        meter.resetPeaks();
     }
 
     inline void setPower (const bool powerOn, const bool notify = true)
@@ -96,6 +113,34 @@ private:
     DecibelScale scale;
     Label name;
     Label levelLabel;
+    ClipHold clip;
+
+    struct ClipLight : public Component
+    {
+        std::function<void()> onClick;
+        void setLit (bool shouldBeLit)
+        {
+            if (lit == shouldBeLit)
+                return;
+            lit = shouldBeLit;
+            repaint();
+        }
+
+        void paint (Graphics& g) override
+        {
+            g.setColour (lit ? Colours::red : Colour (0xff303030));
+            g.fillRect (getLocalBounds().reduced (1, 0));
+        }
+
+        void mouseDown (const MouseEvent&) override
+        {
+            if (onClick)
+                onClick();
+        }
+
+        bool lit = false;
+    } clipLight;
+
     struct FaderStyle;
     std::unique_ptr<FaderStyle> _fstyle;
 

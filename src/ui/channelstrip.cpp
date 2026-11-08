@@ -60,6 +60,9 @@ ChannelStripComponent::ChannelStripComponent()
     name.setJustificationType (Justification::centred);
     name.setText ("Name", dontSendNotification);
 
+    addAndMakeVisible (clipLight);
+    clipLight.onClick = [this]() { resetClip(); };
+
     addAndMakeVisible (levelLabel);
     levelLabel.setFont (levelLabel.getFont().withHeight (10));
     levelLabel.setJustificationType (Justification::centred);
@@ -141,6 +144,8 @@ void ChannelStripComponent::resized()
     auto r3 = r2.removeFromRight (quarter);
     r3.removeFromTop (4);
     r3.removeFromBottom (4);
+    clipLight.setBounds (r3.removeFromTop (6));
+    r3.removeFromTop (1);
     meter.setBounds (r3);
     scale.setBounds (meter.getBoundsInParent());
 }
