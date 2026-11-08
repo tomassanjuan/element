@@ -77,6 +77,16 @@ public:
         if (owner.services().getRunMode() == RunMode::Plugin)
             addAndMakeVisible (pluginMenu);
 
+        audioButton.setButtonText (TRANS ("audio"));
+        audioButton.setColour (SettingButton::backgroundColourId, Colors::toggleRed);
+        audioButton.setColour (SettingButton::backgroundOnColourId, Colors::toggleGreen);
+        audioButton.addListener (this);
+        addAndMakeVisible (audioButton);
+        if (owner.services().getRunMode() == RunMode::Plugin)
+            audioButton.setVisible (false);
+        else
+            updateAudioButton();
+
         addAndMakeVisible (midiBlinker);
     }
 
@@ -182,6 +192,13 @@ public:
                                      .withSizeKeepingCentre (tempoBarHeight * 2, tempoBarHeight));
         }
 
+        if (audioButton.isVisible())
+        {
+            r.removeFromRight (4);
+            audioButton.setBounds (r.removeFromRight (tempoBarHeight * 2)
+                                       .withSizeKeepingCentre (tempoBarHeight * 2, tempoBarHeight));
+        }
+
         if (transport.isVisible())
         {
             r = getLocalBounds().withX ((getWidth() / 2) - (transport.getWidth() / 2));
@@ -206,10 +223,21 @@ public:
         {
             ViewHelpers::invokeDirectly (this, Commands::toggleMidiLearn, true);
         }
+        else if (btn == &audioButton)
+        {
+            auto& devices = owner.context().devices();
+            if (devices.getCurrentAudioDevice() != nullptr)
+                devices.closeAudioDevice();
+            else
+                startAudioDevice();
+            updateAudioButton();
+        }
     }
 
     void timerCallback() override
     {
+        updateAudioButton();
+
         // Keep the button in sync with the learn state no matter how it was
         // toggled (header button, keyboard shortcut, or menu).
         if (auto* mapping = owner.services().find<MappingService>())
@@ -223,11 +251,45 @@ private:
     MappingService* mappingService = nullptr;
     SettingButton viewBtn;
     SettingButton mapButton;
+    SettingButton audioButton;
+    AudioDeviceManager::AudioDeviceSetup lastSetup;
     TempoAndMeterBar tempoBar;
     TransportBar transport;
     IconButton pluginMenu;
     MidiBlinker midiBlinker;
     Array<SignalConnection> connections;
+
+    void startAudioDevice()
+    {
+        auto& devices = owner.context().devices();
+        const auto error = devices.setAudioDeviceSetup (lastSetup, false);
+        updateAudioButton();
+        if (error.isEmpty() && devices.getCurrentAudioDevice() != nullptr)
+            return;
+
+        auto options = MessageBoxOptions()
+                           .withIconType (MessageBoxIconType::WarningIcon)
+                           .withTitle (TRANS ("Audio device unavailable"))
+                           .withMessage (error.isNotEmpty() ? error : TRANS ("The audio device could not be started. It may be in use by another application."))
+                           .withButton (TRANS ("Retry"))
+                           .withButton (TRANS ("Cancel"));
+        AlertWindow::showAsync (options, [safe = SafePointer<Toolbar> (this)] (int result) {
+            if (result == 1 && safe != nullptr)
+                safe->startAudioDevice();
+        });
+    }
+
+    void updateAudioButton()
+    {
+        auto& devices = owner.context().devices();
+        const bool running = devices.getCurrentAudioDevice() != nullptr;
+        if (running)
+            lastSetup = devices.getAudioDeviceSetup();
+        audioButton.setToggleState (running, dontSendNotification);
+        audioButton.setEnabled (running || lastSetup.inputDeviceName.isNotEmpty() || lastSetup.outputDeviceName.isNotEmpty());
+        audioButton.setTooltip (running ? TRANS ("Stop the audio engine and release the audio device")
+                                        : TRANS ("Start the audio engine"));
+    }
 
     void runPluginMenu()
     {

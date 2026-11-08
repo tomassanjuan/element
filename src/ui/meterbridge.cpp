@@ -147,8 +147,13 @@ struct VuLevelMeter : public Component,
         g.fillRect (box);
 
         g.setColour (Colours::white);
-        g.setFont (Font (FontOptions (getWidth() >= 24 ? 11.f : 10.f, Font::bold)));
-        g.drawFittedText (levelText, box, Justification::centred, 1, 0.6f);
+        float size = 11.f;
+        Font font (FontOptions (size, Font::bold));
+        while (size > 6.f && GlyphArrangement::getStringWidthInt (font, levelText) > box.getWidth() - 4)
+            font = Font (FontOptions (size -= 0.5f, Font::bold));
+
+        g.setFont (font);
+        g.drawText (levelText, box, Justification::centred, false);
     }
 
     void mouseDown (const MouseEvent&) override
@@ -237,18 +242,12 @@ public:
 
     void updateSectionLabels()
     {
-        const String mode = ! vuStyle ? String() : (sLevelMode == LevelMode::RMS ? "RMS" : "Peak");
-
-        // With both sections shown the mode sits between IN and OUT.
-        const bool both = audioInsVisible && audioOutsVisible && mode.isNotEmpty();
-        const String suffix = (! both && mode.isNotEmpty()) ? " " + mode : String();
-        audioInLabel.setText ("IN" + suffix, dontSendNotification);
-        audioOutLabel.setText ("OUT" + suffix, dontSendNotification);
-        audioInLabel.setJustificationType (both ? Justification::centredLeft : Justification::centred);
-        audioOutLabel.setJustificationType (both ? Justification::centredRight : Justification::centred);
-
-        modeLabel.setText (both ? mode : String(), dontSendNotification);
-        modeLabel.setVisible (both);
+        audioInLabel.setText ("IN", dontSendNotification);
+        audioOutLabel.setText ("OUT", dontSendNotification);
+        audioInLabel.setJustificationType (Justification::centred);
+        audioOutLabel.setJustificationType (Justification::centred);
+        modeLabel.setText (sLevelMode == LevelMode::RMS ? "RMS" : "Peak", dontSendNotification);
+        modeLabel.setVisible (vuStyle);
     }
 
     int sectionPadding() { return 6; }
@@ -277,20 +276,50 @@ public:
 
     bool showChannelLabels() { return meterSize >= 18; }
 
+    /** Shrinks the meters so every channel fits the bridge width. */
+    void fitMeters()
+    {
+        drawSize = meterSize;
+        drawSpace = meterSpace;
+        const int count = meters.size() + metersOut.size();
+        const int padding = (audioInsVisible && audioOutsVisible) ? sectionPadding() * 2 : 0;
+        const int available = bridge.getWidth() - padding;
+        const int wanted = (meterSize + meterSpace) * count;
+        if (count == 0 || available <= 0 || wanted <= available)
+            return;
+
+        const float scale = (float) available / (float) wanted;
+        drawSize = jmax (4, (int) (meterSize * scale));
+        drawSpace = jmax (1, (int) (meterSpace * scale));
+    }
+
+    int drawSpaceRequired (bool input)
+    {
+        return (drawSize + drawSpace) * (input ? meters.size() : metersOut.size());
+    }
+
+    int drawTotalSpace()
+    {
+        return drawSpaceRequired (true) + (sectionPadding() * 2) + drawSpaceRequired (false);
+    }
+
     void resized()
     {
+        fitMeters();
         const int labSize = 15;
+        const int modeHeight = vuStyle ? 12 : 0;
+        modeLabel.setBounds (0, bridge.getHeight() - modeHeight - 3, bridge.getWidth(), modeHeight);
         auto r = bridge.getLocalBounds()
                      .reduced (0, 3)
-                     .withWidth (totalSpaceRequired());
+                     .withWidth (drawTotalSpace());
         r.removeFromTop (4);
-        r.removeFromBottom (4);
+        r.removeFromBottom (4 + modeHeight);
         if (audioInsVisible && ! audioOutsVisible)
         {
             auto r1 = r.removeFromTop (labSize);
             auto r2 = r.removeFromBottom (showChannelLabels() ? labSize : 0);
 
-            int totalSpace = meterSpaceRequired (true);
+            int totalSpace = drawSpaceRequired (true);
 
             r.setX (bridge.getWidth() / 2 - totalSpace / 2);
             r2.setX (r.getX());
@@ -300,16 +329,16 @@ public:
 
             for (auto* meter : meters)
             {
-                meter->setBounds (r.removeFromLeft (meterSize));
-                r.removeFromLeft (meterSpace);
+                meter->setBounds (r.removeFromLeft (drawSize));
+                r.removeFromLeft (drawSpace);
             }
 
             if (showChannelLabels())
             {
                 for (auto* lab : meterLabels)
                 {
-                    lab->setBounds (r2.removeFromLeft (meterSize));
-                    r2.removeFromLeft (meterSpace);
+                    lab->setBounds (r2.removeFromLeft (drawSize));
+                    r2.removeFromLeft (drawSpace);
                 }
             }
         }
@@ -318,7 +347,7 @@ public:
         {
             auto r1 = r.removeFromTop (labSize);
             auto r2 = r.removeFromBottom (showChannelLabels() ? labSize : 0);
-            int totalSpace = meterSpaceRequired (false);
+            int totalSpace = drawSpaceRequired (false);
 
             r.setX (bridge.getWidth() / 2 - totalSpace / 2);
             r2.setX (r.getX());
@@ -327,16 +356,16 @@ public:
             audioOutLabel.setBounds (r1);
             for (auto* meter : metersOut)
             {
-                meter->setBounds (r.removeFromLeft (meterSize));
-                r.removeFromLeft (meterSpace);
+                meter->setBounds (r.removeFromLeft (drawSize));
+                r.removeFromLeft (drawSpace);
             }
 
             if (showChannelLabels())
             {
                 for (auto* lab : meterOutLabels)
                 {
-                    lab->setBounds (r2.removeFromLeft (meterSize));
-                    r2.removeFromLeft (meterSpace);
+                    lab->setBounds (r2.removeFromLeft (drawSize));
+                    r2.removeFromLeft (drawSpace);
                 }
             }
         }
@@ -345,47 +374,46 @@ public:
             auto r1 = r.removeFromTop (labSize);
             auto r2 = r.removeFromBottom (showChannelLabels() ? labSize : 0);
 
-            int totalSpace = totalSpaceRequired();
+            int totalSpace = drawTotalSpace();
 
             r.setX (bridge.getWidth() / 2 - totalSpace / 2);
             r2.setX (r.getX());
             r1.setX (r.getX());
-            modeLabel.setBounds (r1.withWidth (totalSpace));
-            r1.setWidth (meterSpaceRequired (true));
+            r1.setWidth (drawSpaceRequired (true));
             audioInLabel.setBounds (r1);
 
             for (auto* meter : meters)
             {
-                meter->setBounds (r.removeFromLeft (meterSize));
-                r.removeFromLeft (meterSpace);
+                meter->setBounds (r.removeFromLeft (drawSize));
+                r.removeFromLeft (drawSpace);
             }
 
             r.removeFromLeft (sectionPadding() * 2);
 
             r1.setX (r.getX());
-            r1.setWidth (meterSpaceRequired (false));
+            r1.setWidth (drawSpaceRequired (false));
             audioOutLabel.setBounds (r1);
 
             for (auto* meter : metersOut)
             {
-                meter->setBounds (r.removeFromLeft (meterSize));
-                r.removeFromLeft (meterSpace);
+                meter->setBounds (r.removeFromLeft (drawSize));
+                r.removeFromLeft (drawSpace);
             }
 
             if (showChannelLabels())
             {
                 for (auto* lab : meterLabels)
                 {
-                    lab->setBounds (r2.removeFromLeft (meterSize));
-                    r2.removeFromLeft (meterSpace);
+                    lab->setBounds (r2.removeFromLeft (drawSize));
+                    r2.removeFromLeft (drawSpace);
                 }
 
                 r2.removeFromLeft (sectionPadding() * 2);
 
                 for (auto* lab : meterOutLabels)
                 {
-                    lab->setBounds (r2.removeFromLeft (meterSize));
-                    r2.removeFromLeft (meterSpace);
+                    lab->setBounds (r2.removeFromLeft (drawSize));
+                    r2.removeFromLeft (drawSpace);
                 }
             }
         }
@@ -485,6 +513,8 @@ private:
     bool audioInsVisible = false;
     bool audioOutsVisible = false;
     int meterSize = 18;
+    int drawSize = 18;
+    int drawSpace = 4;
     int meterSpace = 4;
     [[maybe_unused]] int meterSegments = 7;
     uint32_t visibility = 0;
