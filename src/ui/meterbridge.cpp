@@ -381,8 +381,8 @@ private:
     OwnedArray<Component> meters, metersOut;
     bool vuStyle = false;
     OwnedArray<Label> meterLabels, meterOutLabels;
-    Label audioInLabel { "audioin", "INS" };
-    Label audioOutLabel { "audioout", "OUTS" };
+    Label audioInLabel { "audioin", "IN" };
+    Label audioOutLabel { "audioout", "OUT" };
     bool audioInsVisible = false;
     bool audioOutsVisible = false;
     int meterSize = 18;
