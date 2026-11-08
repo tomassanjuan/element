@@ -991,8 +991,8 @@ void BlockComponent::paint (Graphics& g)
     if (latencyHint.text.isNotEmpty() && displayMode != Compact)
     {
         g.setColour (normalTextColor.withAlpha (0.75f));
-        g.setFont (Font (FontOptions (9.f)));
-        g.drawText (latencyHint.text, box.withHeight (colorBarHeight).reduced (3, 0), Justification::centredRight, false);
+        g.setFont (Font (FontOptions (8.f)));
+        g.drawText (latencyHint.text, box.reduced (4, 2), Justification::bottomRight, false);
     }
 
     if (mouseInCornerResize)
