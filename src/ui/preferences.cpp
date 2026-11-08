@@ -11,6 +11,7 @@
 #include <element/ui/content.hpp>
 #include <element/ui/mainwindow.hpp>
 #include <element/ui/preferences.hpp>
+#include <element/ui/simplemeter.hpp>
 #include <element/ui/updater.hpp>
 #include <element/version.hpp>
 
@@ -441,6 +442,15 @@ public:
             }
         };
 
+        addAndMakeVisible (meterColorsLabel);
+        meterColorsLabel.setText ("Meter colors", dontSendNotification);
+        meterColorsLabel.setFont (Font (FontOptions (12.0, Font::bold)));
+        addAndMakeVisible (meterColorsBox);
+        meterColorsBox.addItem ("Original", 1);
+        meterColorsBox.addItem ("Standard (-6 dB green, 0 yellow, over red)", 2);
+        meterColorsBox.setSelectedId (settings.getMeterColorScheme() + 1, dontSendNotification);
+        meterColorsBox.getSelectedIdAsValue().addListener (this);
+
         addAndMakeVisible (defaultSessionFileLabel);
         defaultSessionFileLabel.setText ("Default new Session", dontSendNotification);
         defaultSessionFileLabel.setFont (Font (FontOptions (12.0, Font::bold)));
@@ -481,6 +491,7 @@ public:
     {
         clockSource.removeListener (this);
         mainContentBox.getSelectedIdAsValue().removeListener (this);
+        meterColorsBox.getSelectedIdAsValue().removeListener (this);
     }
 
     void filenameComponentChanged (FilenameComponent* f) override
@@ -539,6 +550,11 @@ public:
 
         layoutSetting (r, systrayLabel, systray);
         layoutSetting (r, desktopScaleLabel, desktopScale, getWidth() / 4);
+
+        r.removeFromTop (spacingBetweenSections);
+        r2 = r.removeFromTop (settingHeight);
+        meterColorsLabel.setBounds (r2.removeFromLeft (getWidth() / 2));
+        meterColorsBox.setBounds (r2.withSizeKeepingCentre (r2.getWidth(), settingHeight));
 
 #if ! ELEMENT_SE
         layoutSetting (r, defaultSessionFileLabel, defaultSessionFile, 190 - settingHeight);
@@ -607,6 +623,11 @@ public:
             settings.setSystrayEnabled (systray.getToggleState());
             gui.refreshSystemTray();
         }
+        else if (value.refersToSameSourceAs (meterColorsBox.getSelectedIdAsValue()))
+        {
+            settings.setMeterColorScheme (meterColorsBox.getSelectedId() - 1);
+            SimpleMeter::setColorScheme (static_cast<SimpleMeter::ColorScheme> (settings.getMeterColorScheme()));
+        }
         else if (value.refersToSameSourceAs (mainContentBox.getSelectedIdAsValue()))
         {
             auto uitype = settings.getMainContentType();
@@ -673,6 +694,9 @@ private:
 
     Label mainContentLabel;
     ComboBox mainContentBox;
+
+    Label meterColorsLabel;
+    ComboBox meterColorsBox;
 
     Settings& settings;
     AudioEnginePtr engine;

@@ -31,6 +31,7 @@ const char* Settings::oscHostEnabledKey = "oscHostEnabledKey";
 const char* Settings::systrayKey = "systrayKey";
 const char* Settings::midiOutLatencyKey = "midiOutLatency";
 const char* Settings::desktopScaleKey = "desktopScale";
+const char* Settings::meterColorSchemeKey = "meterColorScheme";
 const char* Settings::mainContentTypeKey = "mainContentType";
 const char* Settings::pluginListHeaderKey = "pluginListHeader";
 const char* Settings::devicesKey = "devices";
@@ -389,6 +390,20 @@ void Settings::setMidiOutLatency (double latencyMs)
         return;
     if (auto* p = getProps())
         p->setValue (midiOutLatencyKey, latencyMs);
+}
+
+//=============================================================================
+int Settings::getMeterColorScheme() const
+{
+    if (auto* p = getProps())
+        return p->getIntValue (meterColorSchemeKey, 0);
+    return 0;
+}
+
+void Settings::setMeterColorScheme (int scheme)
+{
+    if (auto* p = getProps())
+        p->setValue (meterColorSchemeKey, jlimit (0, 1, scheme));
 }
 
 //=============================================================================

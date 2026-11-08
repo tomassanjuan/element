@@ -41,6 +41,7 @@ public:
     static const char* systrayKey;
     static const char* midiOutLatencyKey;
     static const char* desktopScaleKey;
+    static const char* meterColorSchemeKey;
     static const char* mainContentTypeKey;
     static const char* pluginListHeaderKey;
     static const char* devicesKey;
@@ -123,6 +124,10 @@ public:
 
     double getDesktopScale() const;
     void setDesktopScale (double);
+
+    /** Meter color scheme: 0 = original, 1 = standard (green, yellow, red). */
+    int getMeterColorScheme() const;
+    void setMeterColorScheme (int);
 
     juce::String getMainContentType() const;
     void setMainContentType (const juce::String&);

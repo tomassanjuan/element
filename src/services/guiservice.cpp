@@ -24,6 +24,7 @@
 #include "ui/aboutscreen.hpp"
 #include "ui/capslock.hpp"
 #include "ui/pluginwindow.hpp"
+#include <element/ui/simplemeter.hpp>
 #include "ui/systemtray.hpp"
 #include "ui/virtualkeyboardview.hpp"
 #include "ui/windowmanager.hpp"
@@ -706,6 +707,8 @@ void GuiService::run()
 
     Desktop::getInstance().setGlobalScaleFactor (
         context().settings().getDesktopScale());
+    SimpleMeter::setColorScheme (
+        static_cast<SimpleMeter::ColorScheme> (context().settings().getMeterColorScheme()));
 
     mainWindow = factory->createMainWindow();
     if (mainWindow == nullptr)

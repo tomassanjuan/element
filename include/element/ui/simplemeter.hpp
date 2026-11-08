@@ -85,6 +85,17 @@ public:
 
     const juce::Colour& color (const int index) const;
 
+    /** How level colors are chosen. Applies to all SimpleMeters. */
+    enum class ColorScheme {
+        /** Blended gradient colors from the style. */
+        Original = 0,
+        /** Green below -6 dB, yellow from -6 to 0 dB, red above 0 dB. */
+        Standard = 1
+    };
+
+    static void setColorScheme (ColorScheme);
+    static ColorScheme getColorScheme();
+
     enum ColoursIds {
         levelOverColourId = 0x90900001,
         level0dBColourId = 0x90900002,

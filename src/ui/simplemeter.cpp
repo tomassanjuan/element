@@ -21,6 +21,10 @@
 namespace element {
 using namespace juce;
 
+static SimpleMeter::ColorScheme sColorScheme = SimpleMeter::ColorScheme::Original;
+void SimpleMeter::setColorScheme (ColorScheme scheme) { sColorScheme = scheme; }
+SimpleMeter::ColorScheme SimpleMeter::getColorScheme() { return sColorScheme; }
+
 SimpleMeterValue::SimpleMeterValue (SimpleMeter* parent)
     : meter (parent),
       value (0.0f),
@@ -110,10 +114,34 @@ void SimpleMeterValue::paint (Graphics& g)
         }
     }
 
+    const bool standard = SimpleMeter::getColorScheme() == SimpleMeter::ColorScheme::Standard;
+    const int pos6dB = meter->getIECLevel (SimpleMeter::Color6dB);
+    const int pos0dB = meter->getIECLevel (SimpleMeter::Color0dB);
+    const auto standardColour = [pos6dB, pos0dB] (int position) {
+        return position > pos0dB ? Colours::red : position > pos6dB ? Colours::yellow
+                                                                    : Colours::limegreen;
+    };
+
+    if (standard)
+    {
+        // solid bands: green up to -6 dB, yellow up to 0 dB, red above
+        const auto band = [&] (int from, int to, Colour colour) {
+            to = jmin (to, level);
+            if (to <= from)
+                return;
+            g.setColour (colour);
+            vertical ? g.fillRect (0, h - to, w, to - from)
+                     : g.fillRect (from, 0, to - from, h);
+        };
+        band (0, pos6dB, Colours::limegreen);
+        band (pos6dB, pos0dB, Colours::yellow);
+        band (pos0dB, level, Colours::red);
+    }
+
     int ptOver = 0;
     int ptCurr = 0;
-    int colorLevel;
-    for (colorLevel = SimpleMeter::Color10dB;
+    int colorLevel = SimpleMeter::ColorOver;
+    for (colorLevel = standard ? (int) SimpleMeter::ColorOver : (int) SimpleMeter::Color10dB;
          colorLevel > SimpleMeter::ColorOver && level >= ptOver;
          colorLevel--)
     {
@@ -144,7 +172,7 @@ void SimpleMeterValue::paint (Graphics& g)
         ptOver = ptCurr;
     }
 
-    if (level > ptOver)
+    if (! standard && level > ptOver)
     {
         g.setColour (meter->color (SimpleMeter::ColorOver));
         (vertical) ? g.fillRect (0, h - level, w, level - ptOver)
@@ -173,7 +201,7 @@ void SimpleMeterValue::paint (Graphics& g)
         }
     }
 
-    g.setColour (meter->color (peakColor));
+    g.setColour (standard ? standardColour (peak) : meter->color (peakColor));
     (vertical) ? g.drawLine (0, h - peak, w, h - peak)
                : g.drawLine (peak, 0, peak, h);
 }
