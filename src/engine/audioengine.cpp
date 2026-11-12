@@ -256,6 +256,9 @@ struct RootGraphRender : public AsyncUpdater
             taskManager->setWorkgroup (workgroup);
     }
 
+    /** Number of render worker threads, 0 when multithreading is off. */
+    int getNumThreads() const { return taskManager ? taskManager->getNumThreads() : 0; }
+
 private:
     // room for the resetMidi() burst plus regular traffic without allocating while rendering.
     static constexpr size_t midiReserveBytes = 8192;
@@ -1111,7 +1114,9 @@ private:
         options.allowRealtime = engine.getRunMode() != RunMode::Plugin;
 #endif
         graphs.setMultithreadingConfig (multithreading, options);
+        renderThreads.set (graphs.getNumThreads());
     }
+    Atomic<int> renderThreads;
     Atomic<int> activeGraphIndex;
 
     int numInputChans, numOutputChans;
@@ -1449,6 +1454,11 @@ void AudioEngine::updateExternalLatencySamples()
 int AudioEngine::getExternalLatencySamples() const
 {
     return priv != nullptr ? priv->latencySamples : 0;
+}
+
+int AudioEngine::getNumRenderThreads() const
+{
+    return priv != nullptr ? priv->renderThreads.get() : 0;
 }
 
 MidiIOMonitorPtr AudioEngine::getMidiIOMonitor() const

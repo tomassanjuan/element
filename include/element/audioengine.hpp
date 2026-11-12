@@ -128,6 +128,12 @@ public:
     void updateExternalLatencySamples();
     int getExternalLatencySamples() const;
 
+    /** Returns the number of multithreaded render worker threads.
+
+        @return the worker count, or 0 when multithreaded rendering is off
+    */
+    int getNumRenderThreads() const;
+
     Context& context() const;
     MidiIOMonitorPtr getMidiIOMonitor() const;
 

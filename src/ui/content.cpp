@@ -420,6 +420,11 @@ public:
                 strText = "Running";
             text << "Engine: " << strText << ":  CPU: " << String (devices.getCpuUsage() * 100.f, 1) << "%"
                  << ":  Drops: " << devices.getXRunCount();
+            if (engine != nullptr)
+            {
+                const int threads = engine->getNumRenderThreads();
+                text << ":  Multithreading: " << (threads > 0 ? "On (" + String (threads) + " threads)" : "Off");
+            }
             streamingStatusLabel.setText (text, dontSendNotification);
 
             statusLabel.setText (String ("Device: ") + dev->getName(), dontSendNotification);
