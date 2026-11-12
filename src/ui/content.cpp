@@ -278,8 +278,8 @@ private:
                            .withIconType (MessageBoxIconType::WarningIcon)
                            .withTitle (TRANS ("Audio device unavailable"))
                            .withMessage (error)
-                           .withButton (TRANS ("Retry"))
-                           .withButton (TRANS ("Cancel"));
+                           .withButton (TRANS ("Retry"), 1)
+                           .withButton (TRANS ("Cancel"), 0);
         AlertWindow::showAsync (options, [safe = SafePointer<Toolbar> (this)] (int result) {
             if (result == 1 && safe != nullptr)
                 safe->startAudioDevice();

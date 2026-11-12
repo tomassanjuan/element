@@ -194,14 +194,6 @@ public:
     }
 
     // AlertWindow
-    virtual juce::AlertWindow* createAlertWindow (const juce::String& title, const juce::String& message,
-                                            const juce::String& button1,
-                                            const juce::String& button2,
-                                            const juce::String& button3,
-                                            juce::MessageBoxIconType iconType,
-                                            int numButtons,
-                                            juce::Component* associatedComponent) override;
-
     virtual void drawAlertBox (juce::Graphics&, juce::AlertWindow&, const juce::Rectangle<int>& textArea, juce::TextLayout&) override;
 
     virtual int getAlertBoxWindowFlags() override;

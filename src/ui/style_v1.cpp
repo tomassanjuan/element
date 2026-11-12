@@ -1087,21 +1087,6 @@ void LookAndFeel_E1::drawKeymapChangeButton (Graphics& g, int width, int height,
 }
 
     // AlertWindow
-juce::AlertWindow* LookAndFeel_E1::createAlertWindow (const juce::String& title, 
-                                                      const juce::String& message,
-                                                      const juce::String& button1,
-                                                      const juce::String& button2,
-                                                      const juce::String& button3,
-                                                      juce::MessageBoxIconType iconType,
-                                                      int numButtons,
-                                                      juce::Component* associatedComponent)
-{
-    return LookAndFeel_V3::createAlertWindow (title, message, 
-                                              button1, button2, button3, 
-                                              iconType, numButtons, 
-                                              associatedComponent);
-}
-
 void LookAndFeel_E1::drawAlertBox (juce::Graphics& g, 
                                    juce::AlertWindow& w, 
                                    const juce::Rectangle<int>& r, 

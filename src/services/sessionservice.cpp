@@ -523,8 +523,8 @@ static MessageBoxOptions startupPrompt (GuiService* gui, const String& title, co
                        .withIconType (MessageBoxIconType::WarningIcon)
                        .withTitle (title)
                        .withMessage (message)
-                       .withButton (button0)
-                       .withButton (button1);
+                       .withButton (button0, 0)
+                       .withButton (button1, 1);
     if (gui != nullptr)
         if (auto* window = gui->getMainWindow())
             options = options.withAssociatedComponent (window);
