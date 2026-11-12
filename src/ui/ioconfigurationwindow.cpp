@@ -292,22 +292,39 @@ private:
                 const auto shown = currentBus < pending.size() ? pending.getReference (currentBus)
                                                                : bus->getCurrentLayout();
 
+                // speaker layouts first, then ambisonics, then discrete; each by channel count
+                auto group = [] (const AudioChannelSet& s) { return s.isDiscreteLayout() ? 2 : (s.getAmbisonicOrder() >= 0 ? 1 : 0); };
+                Array<AudioChannelSet> sets;
                 for (auto i = 1; i <= AudioChannelSet::maxChannelsOfNamedLayout; ++i)
-                {
                     for (const auto& set : AudioChannelSet::channelSetsWithNumberOfChannels (i))
-                    {
                         if (bus->isLayoutSupported (set))
-                        {
-                            menu->addItem (PopupMenu::Item { set.getDescription() }
-                                               .setAction ([this, set] { applyBusLayout (set); })
-                                               .setID (itemId));
-                        }
+                            sets.add (set);
 
-                        if (shown == set)
-                            selectedId = itemId;
+                std::stable_sort (sets.begin(), sets.end(), [&] (const AudioChannelSet& a, const AudioChannelSet& b) {
+                    if (group (a) != group (b))
+                        return group (a) < group (b);
+                    if (a.size() != b.size())
+                        return a.size() < b.size();
+                    return a.getDescription() < b.getDescription();
+                });
 
-                        ++itemId;
+                int lastGroup = 0;
+                for (const auto& set : sets)
+                {
+                    if (group (set) != lastGroup)
+                    {
+                        menu->addSeparator();
+                        lastGroup = group (set);
                     }
+
+                    menu->addItem (PopupMenu::Item { set.getDescription() }
+                                       .setAction ([this, set] { applyBusLayout (set); })
+                                       .setID (itemId));
+
+                    if (shown == set)
+                        selectedId = itemId;
+
+                    ++itemId;
                 }
 
                 layouts.setSelectedId (selectedId);
