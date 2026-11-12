@@ -27,8 +27,8 @@ void DecibelScale::paint (Graphics& g)
     lastY = 0;
 
     // scale marks, positioned on the IEC curve
-    for (const int dB : { 0, -6, -12, -24, -48, -60 })
-        drawLabel (g, iecScale ((float) dB), String (dB));
+    for (const int dB : { 3, 0, -6, -12, -18, -24, -36, -48, -60 })
+        drawLabel (g, iecScale ((float) dB), dB > 0 ? "+" + String (dB) : String (dB));
 }
 
 void DecibelScale::resized()
