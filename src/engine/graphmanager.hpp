@@ -85,6 +85,10 @@ public:
 
     void clear();
 
+    /** Saves plugin states and releases all processors, keeping the node model intact.
+        Call setNodeModel() to load the graph again. */
+    void unload();
+
     void setNodeModel (const Node& node);
     inline Node getGraphModel() const { return Node (graph, false); }
 

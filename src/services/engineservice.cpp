@@ -837,26 +837,7 @@ void EngineService::setRootNode (const Node& newRootNode)
         holder->attach (engine);
     const int index = holder->getRootGraph()->getEngineIndex();
 
-#if 0
-    // saving this for reference. graphs will need to be
-    // explicitly de-activated by users to unload them
-    // moving forward - MRF
-    
-    /* Unload the active graph if necessary */
-    auto* active = graphs->findActiveInEngine();
-    if (active && active != holder)
-    {
-        if (auto* gui = sibling<GuiService>())
-            gui->closeAllPluginWindows();
-        
-        if (! (bool) active->model.getProperty(tags::persistent) && active->attached())
-        {
-            active->controller->savePluginStates();
-            active->controller->unloadGraph();
-            DBG("[element] graph unloaded: " << active->model.getName());
-        }
-    }
-#endif
+    auto* previous = graphs->findActiveInEngine();
 
     if (auto* proc = holder->getRootGraph())
     {
@@ -881,6 +862,14 @@ void EngineService::setRootNode (const Node& newRootNode)
         }
 
         engine->setActiveGraphIndex (index);
+
+        if (previous != nullptr && previous != holder && previous->attached()
+            && ! (bool) previous->model.getProperty (tags::persistent, true))
+        {
+            if (auto* gui = sibling<GuiService>())
+                gui->closeAllPluginWindows();
+            previous->getController()->unloadGraph();
+        }
     }
     else
     {

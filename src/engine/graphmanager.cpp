@@ -766,6 +766,15 @@ void GraphManager::savePluginStates()
     }
 }
 
+void GraphManager::unload()
+{
+    savePluginStates();
+    processor.clear();
+    for (int i = 0; i < nodes.getNumChildren(); ++i)
+        Node::sanitizeRuntimeProperties (nodes.getChild (i), true);
+    loaded = false;
+}
+
 void GraphManager::clear()
 {
     loaded = false;
@@ -949,7 +958,7 @@ RootGraphManager::~RootGraphManager() {}
 
 void RootGraphManager::unloadGraph()
 {
-    getRootGraph().clear();
+    unload();
 }
 
 } // namespace element

@@ -493,9 +493,9 @@ private:
         props.add (new GraphChannelCountPropertyComponent (g, PortType::Audio, false));
         props.add (new GraphChannelCountPropertyComponent (g, PortType::Midi, true));
         props.add (new GraphChannelCountPropertyComponent (g, PortType::Midi, false));
-        // props.add (new BooleanPropertyComponent (g.getPropertyAsValue (tags::persistent),
-        //                                          TRANS("Persistent"),
-        //                                          TRANS("Don't unload when deactivated")));
+        props.add (new BooleanPropertyComponent (g.getPropertyAsValue (tags::persistent),
+                                                 TRANS ("Persistent"),
+                                                 TRANS ("Don't unload when deactivated")));
     }
 };
 
