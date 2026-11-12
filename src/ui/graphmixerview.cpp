@@ -4,6 +4,7 @@
 #include <element/engine.hpp>
 #include <element/services.hpp>
 #include <element/ui/style.hpp>
+#include <element/ui/decibelscale.hpp>
 #include <element/ui/meterbridge.hpp>
 #include <element/ui/standard.hpp>
 
@@ -329,6 +330,8 @@ public:
         viewport.setViewedComponent (&inner, false);
         viewport.setScrollBarsShown (false, true);
         addAndMakeVisible (viewport);
+        addAndMakeVisible (scale);
+        scale.setInterceptsMouseClicks (false, false);
     }
 
     ~ChannelOverview() override { viewport.setViewedComponent (nullptr, false); }
@@ -359,8 +362,17 @@ public:
 
     void resized() override
     {
-        viewport.setBounds (getLocalBounds());
+        auto r = getLocalBounds();
+        scaleArea = r.removeFromLeft (scaleWidth);
+        viewport.setBounds (r);
         layoutGroups();
+    }
+
+    void paint (Graphics& g) override
+    {
+        g.setColour (Colors::textColor.withAlpha (0.6f));
+        g.setFont (Font (FontOptions (9.f)));
+        g.drawFittedText ("RMS\ndB", scaleArea.withTop (scale.getBottom()), Justification::centred, 2);
     }
 
     void visibilityChanged() override
@@ -372,6 +384,11 @@ public:
     }
 
 private:
+    static constexpr int headerHeight = 22;
+    static constexpr int readoutHeight = 32;
+    static constexpr int scaleWidth = 30;
+    static constexpr int columnWidth = 36;
+
     class Column : public Component
     {
     public:
@@ -398,13 +415,13 @@ private:
             auto r = getLocalBounds().removeFromBottom (readoutHeight);
             g.setFont (Font (FontOptions (11.f)));
             g.setColour (Colors::textColor);
-            g.drawText (String (number), r.removeFromTop (readoutHeight / 2), Justification::centred);
-            g.setColour (db > 0.f ? Colours::red : Colors::textColor);
-            g.drawText (db <= -60.f ? String ("-inf") : String (db, 1), r, Justification::centred);
+            g.drawText (String (number), r.removeFromTop (readoutHeight / 2), Justification::centred, false);
+            g.setFont (Font (FontOptions (11.f, Font::bold)));
+            g.setColour (db > 0.f ? Colour (0xffe5484d) : db > -6.f ? Colour (0xfff2a900) : Colors::textColor);
+            g.drawText (db <= -60.f ? String ("-inf") : String (db, 1), r, Justification::centred, false);
         }
 
     private:
-        static constexpr int readoutHeight = 32;
         SimpleMeter meter { 1, false };
         int number;
         float db = -100.f;
@@ -425,7 +442,7 @@ private:
         }
 
         int numColumns() const { return columns.size(); }
-        int preferredWidth() const { return jmax (64, columns.size() * 24 + 8); }
+        int preferredWidth() const { return jmax (72, columns.size() * columnWidth + 8); }
 
         void update()
         {
@@ -477,7 +494,6 @@ private:
         }
 
     private:
-        static constexpr int headerHeight = 22;
         GuiService& gui;
         Node node;
         bool monitorInputs = false;
@@ -495,6 +511,10 @@ private:
         }
 
         inner.setSize (jmax (x, viewport.getMaximumVisibleWidth()), h);
+
+        // the scale spans the same area as the column meters
+        const int top = headerHeight + 2;
+        scale.setBounds (scaleArea.getX(), top, scaleArea.getWidth(), jmax (0, h - headerHeight - 4 - readoutHeight));
     }
 
     void timerCallback() override
@@ -506,6 +526,8 @@ private:
     GuiService& gui;
     Component inner;
     Viewport viewport;
+    DecibelScale scale;
+    Rectangle<int> scaleArea;
     OwnedArray<Group> groups;
     Array<uint32> shownIds;
 };
