@@ -309,6 +309,16 @@ public:
             buffer.applyGain (0, numSamples, node->getInputGain());
         }
 
+        // per-channel input trims, on top of the node's input gain
+        for (int i = jmin (numAudioIns, (int) Processor::maxChannelGains); --i >= 0;)
+        {
+            const float g = node->getChannelInputGain (i), last = node->getLastChannelInputGain (i);
+            if (g != last)
+                buffer.applyGainRamp (i, 0, numSamples, last, g);
+            else if (g != 1.0f)
+                buffer.applyGain (i, 0, numSamples, g);
+        }
+
         for (int i = numAudioIns; --i >= 0;)
             node->setInputRMS (i, buffer.getRMSLevel (i, 0, numSamples), numSamples);
 
@@ -473,6 +483,19 @@ public:
         else
         {
             buffer.applyGain (0, numSamples, node->getGain());
+        }
+
+        // source nodes (no audio inputs, e.g. the graph's audio input) trim their outputs instead
+        if (numAudioIns == 0)
+        {
+            for (int i = jmin (numAudioOuts, (int) Processor::maxChannelGains); --i >= 0;)
+            {
+                const float g = node->getChannelInputGain (i), last = node->getLastChannelInputGain (i);
+                if (g != last)
+                    buffer.applyGainRamp (i, 0, numSamples, last, g);
+                else if (g != 1.0f)
+                    buffer.applyGain (i, 0, numSamples, g);
+            }
         }
 
         node->updateGain();

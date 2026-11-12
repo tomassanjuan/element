@@ -27,6 +27,8 @@ Processor::Processor (const PortList& portList)
     lastGain.set (1.0f);
     inputGain.set (1.0f);
     lastInputGain.set (1.0f);
+    for (int c = 0; c < maxChannelGains; ++c)
+        channelGains[c].set (1.0f), lastChannelGains[c].set (1.0f);
     oversampler = std::make_unique<Oversampler<float>>();
     // ports = portList;
     setPorts (portList);
@@ -44,6 +46,8 @@ Processor::Processor (const uint32 nodeId_) noexcept
     lastGain.set (1.0f);
     inputGain.set (1.0f);
     lastInputGain.set (1.0f);
+    for (int c = 0; c < maxChannelGains; ++c)
+        channelGains[c].set (1.0f), lastChannelGains[c].set (1.0f);
     oversampler = std::make_unique<Oversampler<float>>();
 }
 

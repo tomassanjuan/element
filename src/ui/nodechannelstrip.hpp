@@ -11,6 +11,7 @@
 
 #include "ElementApp.h"
 #include "ui/channelstrip.hpp"
+#include "ui/channelgainpanel.hpp"
 #include "services/sessionservice.hpp"
 
 namespace element {
@@ -36,8 +37,18 @@ public:
                 node.setProperty (tags::name, nodeName.getText());
         };
 
-        addAndMakeVisible (channelBox);
+        // the channel pair selector is replaced by showing every channel; kept hidden for the combo logic
+        addChildComponent (channelBox);
         channelBox.setJustificationType (Justification::centred);
+
+        addChildComponent (channelsButton);
+        channelsButton.setTooltip ("Per-channel input gain");
+        channelsButton.onClick = [this] {
+            if (node.isValid())
+                juce::CallOutBox::launchAsynchronously (std::make_unique<ChannelGainPanel> (node),
+                                                        channelsButton.getScreenBounds(),
+                                                        nullptr);
+        };
 
         addAndMakeVisible (flowBox);
         flowBox.setJustificationType (Justification::centred);
@@ -99,7 +110,7 @@ public:
         auto r2 = r.removeFromBottom (jmin (268, r.getHeight()));
         int boxSize = r2.getWidth() - 8;
         flowBox.setBounds (r2.removeFromTop (16).withSizeKeepingCentre (boxSize, 14));
-        channelBox.setBounds (r2.removeFromTop (16).withSizeKeepingCentre (boxSize, 14));
+        channelsButton.setBounds (r2.removeFromTop (16).withSizeKeepingCentre (boxSize, 14));
         channelStrip.setBounds (r2);
     }
 
@@ -125,25 +136,23 @@ public:
                 level = jmax (level, value);
             };
 
-            const int startChannel = jmax (0, channelBox.getSelectedId() - 1);
-            if (ptr->getNumAudioOutputs() == 1)
+            // every channel of the monitored side gets its own meter; a mono (or no) signal shows as a stereo pair
+            const bool monitorInputs = isAudioOutNode || isMonitoringInputs();
+            const int numChannels = monitorInputs ? ptr->getNumAudioInputs() : ptr->getNumAudioOutputs();
+            auto rms = [&] (int c) { return monitorInputs ? ptr->getInputRMS (c) : ptr->getOutputRMS (c); };
+
+            if (numChannels <= 1)
             {
-                if (isAudioOutNode)
-                    for (int c = 0; c < 2; ++c)
-                        feed (c, ptr->getInputRMS (startChannel));
-                else
-                    for (int c = 0; c < 2; ++c)
-                        feed (c, ptr->getOutputRMS (startChannel));
+                meter.setPortCount (2);
+                for (int c = 0; c < 2; ++c)
+                    feed (c, numChannels == 1 ? rms (0) : 0.f);
             }
             else
             {
-                const int endChannel = startChannel + 2;
-                if (isAudioOutNode || isMonitoringInputs())
-                    for (int c = startChannel; c < endChannel; ++c)
-                        feed (c - startChannel, ptr->getInputRMS (c));
-                else
-                    for (int c = startChannel; c < endChannel; ++c)
-                        feed (c - startChannel, ptr->getOutputRMS (c));
+                const int shown = jmin (numChannels, maxMeterChannels);
+                meter.setPortCount (shown);
+                for (int c = 0; c < shown; ++c)
+                    feed (c, rms (c));
             }
 
             // same +3 dB RMS calibration as SimpleMeter, so the number matches the meter
@@ -259,7 +268,9 @@ private:
     Node node;
     PortArray audioIns, audioOuts;
     ComboBox channelBox, flowBox;
+    TextButton channelsButton { "Ch" };
     ChannelStripComponent channelStrip;
+    static constexpr int maxMeterChannels = 16;
     bool listenForNodeSelected;
 
     bool useFlowBox = true;
@@ -358,14 +369,10 @@ private:
             }
 
             if (channelBox.getNumItems() > 0)
-            {
-                channelBox.setVisible (useFlowBox);
                 channelBox.setSelectedItemIndex (0);
-            }
-            else
-            {
-                channelBox.setVisible (false);
-            }
+
+            channelBox.setVisible (false);
+            channelsButton.setVisible (useChannelBox && (audioIns.size() > 0 || audioOuts.size() > 0));
         }
     }
 

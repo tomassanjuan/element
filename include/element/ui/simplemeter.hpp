@@ -65,6 +65,10 @@ public:
 
     /** Returns the number of ports on this meter */
     int getPortCount() const;
+
+    /** Changes the number of channels shown. Held levels are cleared. */
+    void setPortCount (int numPorts);
+
     void setValue (const int port, const float value);
     int getIECScale (const float dB) const;
     int getIECLevel (const int index) const;

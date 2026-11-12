@@ -239,6 +239,8 @@ public:
     /** True if the graph being shown is unloaded, so there is nothing live to display. */
     bool isUnloaded() const { return unloaded; }
 
+    const NodeArray& getNodes() const noexcept { return nodes; }
+
     void refreshNodes()
     {
         nodes.clearQuick();
@@ -316,8 +318,201 @@ private:
     [[maybe_unused]] bool dragging = false;
 };
 
+/** Every channel of every node on one screen: a meter and a level readout per
+    channel, grouped by node. Clicking a group selects its node. */
+class ChannelOverview : public Component,
+                        private Timer
+{
+public:
+    explicit ChannelOverview (GuiService& g) : gui (g)
+    {
+        viewport.setViewedComponent (&inner, false);
+        viewport.setScrollBarsShown (false, true);
+        addAndMakeVisible (viewport);
+    }
+
+    ~ChannelOverview() override { viewport.setViewedComponent (nullptr, false); }
+
+    void setNodes (const NodeArray& nodes)
+    {
+        Array<uint32> ids;
+        for (const auto& n : nodes)
+            ids.add (n.getNodeId());
+
+        if (ids == shownIds)
+        {
+            repaint();
+            return;
+        }
+
+        shownIds = ids;
+        groups.clear();
+        for (const auto& n : nodes)
+        {
+            auto group = std::make_unique<Group> (gui, n);
+            if (group->numColumns() > 0)
+                inner.addAndMakeVisible (groups.add (group.release()));
+        }
+
+        layoutGroups();
+    }
+
+    void resized() override
+    {
+        viewport.setBounds (getLocalBounds());
+        layoutGroups();
+    }
+
+    void visibilityChanged() override
+    {
+        if (isVisible())
+            startTimerHz (15);
+        else
+            stopTimer();
+    }
+
+private:
+    class Column : public Component
+    {
+    public:
+        explicit Column (int channelNumber) : number (channelNumber) { addAndMakeVisible (meter); }
+
+        void setLevel (float rms)
+        {
+            meter.setValue (0, rms);
+            meter.refresh();
+
+            // same +3 dB RMS calibration as the strip meters
+            const float newDb = Decibels::gainToDecibels (rms, -100.f) + 3.0103f;
+            if (std::abs (newDb - db) >= 0.1f)
+            {
+                db = newDb;
+                repaint (getLocalBounds().removeFromBottom (readoutHeight));
+            }
+        }
+
+        void resized() override { meter.setBounds (getLocalBounds().withTrimmedBottom (readoutHeight).reduced (3, 0)); }
+
+        void paint (Graphics& g) override
+        {
+            auto r = getLocalBounds().removeFromBottom (readoutHeight);
+            g.setFont (Font (FontOptions (11.f)));
+            g.setColour (Colors::textColor);
+            g.drawText (String (number), r.removeFromTop (readoutHeight / 2), Justification::centred);
+            g.setColour (db > 0.f ? Colours::red : Colors::textColor);
+            g.drawText (db <= -60.f ? String ("-inf") : String (db, 1), r, Justification::centred);
+        }
+
+    private:
+        static constexpr int readoutHeight = 32;
+        SimpleMeter meter { 1, false };
+        int number;
+        float db = -100.f;
+    };
+
+    class Group : public Component
+    {
+    public:
+        Group (GuiService& g, const Node& n) : gui (g), node (n)
+        {
+            if (ProcessorPtr p = node.getObject())
+            {
+                monitorInputs = node.isAudioOutputNode() || p->getNumAudioOutputs() == 0;
+                const int count = monitorInputs ? p->getNumAudioInputs() : p->getNumAudioOutputs();
+                for (int c = 0; c < count; ++c)
+                    addAndMakeVisible (columns.add (new Column (c + 1)));
+            }
+        }
+
+        int numColumns() const { return columns.size(); }
+        int preferredWidth() const { return jmax (64, columns.size() * 24 + 8); }
+
+        void update()
+        {
+            if (ProcessorPtr p = node.getObject())
+                for (int c = 0; c < columns.size(); ++c)
+                    columns[c]->setLevel (monitorInputs ? p->getInputRMS (c) : p->getOutputRMS (c));
+        }
+
+        void paint (Graphics& g) override
+        {
+            g.setColour (Colors::widgetBackgroundColor);
+            g.fillAll();
+
+            auto header = getLocalBounds().removeFromTop (headerHeight);
+            const auto color = node.getColor (Colours::transparentBlack);
+            if (color != Colours::transparentBlack)
+            {
+                g.setColour (color);
+                g.fillRect (header);
+            }
+
+            g.setColour (color != Colours::transparentBlack ? Colours::white.overlaidWith (color).contrasting() : Colors::textColor);
+            g.setFont (Font (FontOptions (Style::fontSizeDefault)));
+            g.drawText (node.getDisplayName(), header.reduced (3, 0), Justification::centred, true);
+
+            g.setColour (Colors::backgroundColor);
+            g.fillRect (getWidth() - 1, 0, 1, getHeight());
+
+            if (node == gui.getSelectedNode())
+            {
+                g.setColour (Colors::toggleBlue);
+                g.drawRect (getLocalBounds(), 2);
+            }
+        }
+
+        void resized() override
+        {
+            auto r = getLocalBounds().withTrimmedTop (headerHeight).reduced (4, 2);
+            const int w = columns.isEmpty() ? 0 : r.getWidth() / columns.size();
+            for (auto* col : columns)
+                col->setBounds (r.removeFromLeft (w));
+        }
+
+        void mouseDown (const MouseEvent&) override
+        {
+            gui.selectNode (node);
+            if (auto* parent = getParentComponent())
+                parent->repaint();
+        }
+
+    private:
+        static constexpr int headerHeight = 22;
+        GuiService& gui;
+        Node node;
+        bool monitorInputs = false;
+        OwnedArray<Column> columns;
+    };
+
+    void layoutGroups()
+    {
+        int x = 0;
+        const int h = jmax (50, viewport.getMaximumVisibleHeight() - viewport.getScrollBarThickness());
+        for (auto* group : groups)
+        {
+            group->setBounds (x, 0, group->preferredWidth(), h);
+            x += group->preferredWidth();
+        }
+
+        inner.setSize (jmax (x, viewport.getMaximumVisibleWidth()), h);
+    }
+
+    void timerCallback() override
+    {
+        for (auto* group : groups)
+            group->update();
+    }
+
+    GuiService& gui;
+    Component inner;
+    Viewport viewport;
+    OwnedArray<Group> groups;
+    Array<uint32> shownIds;
+};
+
 /** Whether the meter bridge is shown in the graph mixer (kept while the app runs). */
 static bool sShowMixerMeterBridge = true;
+static bool sShowMixerOverview = false;
 
 class GraphMixerView::Content : public Component,
                                 public DragAndDropContainer
@@ -344,6 +539,18 @@ public:
             sShowMixerMeterBridge = meterToggle.getToggleState();
             resized();
             updateBottomBridge();
+        };
+
+        overview.reset (new ChannelOverview (gui));
+        addChildComponent (overview.get());
+        addAndMakeVisible (overviewToggle);
+        overviewToggle.setTooltip ("Show every channel of every node");
+        overviewToggle.setClickingTogglesState (true);
+        overviewToggle.setToggleState (sShowMixerOverview, dontSendNotification);
+        overviewToggle.onClick = [this]() {
+            sShowMixerOverview = overviewToggle.getToggleState();
+            refreshOverview();
+            resized();
         };
         box.setRowHeight (80);
         model.reset (new GraphMixerListBoxModel (gui, box));
@@ -389,21 +596,35 @@ public:
         model->setNode (ui.getSelectedNode());
         model->refreshNodes();
         box.updateContent();
+        refreshOverview();
         resized();
         repaint();
+    }
+
+    /** Feeds the overview the nodes the strips are showing. */
+    void refreshOverview()
+    {
+        if (sShowMixerOverview && model != nullptr)
+            overview->setNodes (model->getNodes());
     }
 
     void resized() override
     {
         auto r = getLocalBounds();
-        meterToggle.setBounds (r.removeFromRight (24).removeFromTop (28).reduced (1));
+        auto side = r.removeFromRight (24);
+        meterToggle.setBounds (side.removeFromTop (28).reduced (1));
+        overviewToggle.setBounds (side.removeFromTop (28).reduced (1));
 
         const bool showBridge = sShowMixerMeterBridge && (model == nullptr || ! model->isUnloaded());
         meterView.setVisible (showBridge);
         if (showBridge)
             meterView.setBounds (r.removeFromRight (jmax (40, meterView.meterBridge().preferredWidth() + 8)));
 
+        const bool showOverview = sShowMixerOverview && (model == nullptr || ! model->isUnloaded());
+        box.setVisible (! showOverview);
+        overview->setVisible (showOverview);
         box.setBounds (r);
+        overview->setBounds (r);
     }
 
     void paint (Graphics& g) override
@@ -425,6 +646,7 @@ public:
     {
         model->refreshNodes();
         box.updateContent();
+        refreshOverview();
         resized();
         repaint();
     }
@@ -437,6 +659,8 @@ private:
     HorizontalListBox box;
     MeterBridgeView meterView;
     TextButton meterToggle { "VU" };
+    TextButton overviewToggle { "ALL" };
+    std::unique_ptr<ChannelOverview> overview;
     Component::SafePointer<StandardContent> standard;
     std::vector<SignalConnection> _conns;
 };

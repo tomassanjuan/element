@@ -360,6 +360,25 @@ int SimpleMeter::getIECLevel (const int index) const
 }
 
 int SimpleMeter::getPortCount() const { return portCount; }
+
+void SimpleMeter::setPortCount (int numPorts)
+{
+    numPorts = jmax (1, numPorts);
+    if (numPorts == portCount)
+        return;
+
+    if (values != nullptr)
+    {
+        for (int port = 0; port < portCount; port++)
+            delete values[port];
+        delete[] values;
+        values = nullptr;
+    }
+
+    portCount = numPorts;
+    resized(); // recreates the channel meters when the component has a size
+    repaint();
+}
 void SimpleMeter::setPeakFalloff (const int newPeakFalloff) { peakFalloff = newPeakFalloff; }
 int SimpleMeter::getPeakFalloff() const { return peakFalloff; }
 

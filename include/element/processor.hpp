@@ -245,6 +245,26 @@ public:
     /** Set the Gain of this Node */
     void setGain (const float f);
 
+    /** Highest input channel that has its own gain trim. */
+    static constexpr int maxChannelGains = 32;
+
+    /** Linear trim for one input channel, applied on top of the node's input gain. */
+    void setChannelInputGain (int channel, float gain)
+    {
+        if (juce::isPositiveAndBelow (channel, maxChannelGains))
+            channelGains[channel].set (gain);
+    }
+
+    float getChannelInputGain (int channel) const noexcept
+    {
+        return juce::isPositiveAndBelow (channel, maxChannelGains) ? channelGains[channel].get() : 1.0f;
+    }
+
+    float getLastChannelInputGain (int channel) const noexcept
+    {
+        return juce::isPositiveAndBelow (channel, maxChannelGains) ? lastChannelGains[channel].get() : 1.0f;
+    }
+
     inline float getInputGain() const { return inputGain.get(); }
     inline float getGain() const { return gain.get(); }
     inline float getLastGain() const { return lastGain.get(); }
@@ -256,6 +276,9 @@ public:
             lastGain = gain;
         if (lastInputGain.get() != inputGain.get())
             lastInputGain = inputGain;
+        for (int c = 0; c < maxChannelGains; ++c)
+            if (lastChannelGains[c].get() != channelGains[c].get())
+                lastChannelGains[c].set (channelGains[c].get());
     }
 
     juce::ValueTree createPortsData() const;
@@ -596,6 +619,7 @@ private:
     PatchParameterArray _patches;
 
     juce::Atomic<float> gain, lastGain, inputGain, lastInputGain;
+    juce::Atomic<float> channelGains[maxChannelGains], lastChannelGains[maxChannelGains];
 
     /** Per-channel RMS meter integrator. Accumulates the block mean-square with a
         fixed time constant so the metered level is independent of the host's
