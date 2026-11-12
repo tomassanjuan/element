@@ -769,10 +769,12 @@ void GraphManager::savePluginStates()
 void GraphManager::unload()
 {
     savePluginStates();
-    bindings.clear();
-    processor.clear();
+    // Drop the model's processor references first: editors listening to the
+    // model release their parameter observers while the processors are alive.
     for (int i = 0; i < nodes.getNumChildren(); ++i)
         Node::sanitizeRuntimeProperties (nodes.getChild (i), true);
+    bindings.clear();
+    processor.clear();
     loaded = false;
 }
 
