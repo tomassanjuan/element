@@ -11,7 +11,6 @@
 
 #include "ElementApp.h"
 #include "ui/channelstrip.hpp"
-#include "ui/channelgainpanel.hpp"
 #include "services/sessionservice.hpp"
 
 namespace element {
@@ -40,15 +39,6 @@ public:
         // the channel pair selector is replaced by showing every channel; kept hidden for the combo logic
         addChildComponent (channelBox);
         channelBox.setJustificationType (Justification::centred);
-
-        addChildComponent (channelsButton);
-        channelsButton.setTooltip ("Per-channel input gain");
-        channelsButton.onClick = [this] {
-            if (node.isValid())
-                juce::CallOutBox::launchAsynchronously (std::make_unique<ChannelGainPanel> (node),
-                                                        channelsButton.getScreenBounds(),
-                                                        nullptr);
-        };
 
         addAndMakeVisible (flowBox);
         flowBox.setJustificationType (Justification::centred);
@@ -110,7 +100,6 @@ public:
         auto r2 = r.removeFromBottom (jmin (268, r.getHeight()));
         int boxSize = r2.getWidth() - 8;
         flowBox.setBounds (r2.removeFromTop (16).withSizeKeepingCentre (boxSize, 14));
-        channelsButton.setBounds (r2.removeFromTop (16).withSizeKeepingCentre (boxSize, 14));
         channelStrip.setBounds (r2);
     }
 
@@ -268,7 +257,6 @@ private:
     Node node;
     PortArray audioIns, audioOuts;
     ComboBox channelBox, flowBox;
-    TextButton channelsButton { "Ch" };
     ChannelStripComponent channelStrip;
 public:
     static constexpr int maxMeterChannels = 16;
@@ -375,7 +363,6 @@ private:
                 channelBox.setSelectedItemIndex (0);
 
             channelBox.setVisible (false);
-            channelsButton.setVisible (useChannelBox && (audioIns.size() > 0 || audioOuts.size() > 0));
         }
     }
 

@@ -900,13 +900,6 @@ void Node::restoreOwnPluginState()
             obj->setInputGain (getProperty ("inputGain"));
         }
 
-        if (hasProperty (tags::channelGains))
-        {
-            const auto dbs = StringArray::fromTokens (getProperty (tags::channelGains).toString(), ",", "");
-            for (int c = 0; c < dbs.size(); ++c)
-                obj->setChannelInputGain (c, Decibels::decibelsToGain (dbs[c].getFloatValue(), -100.0f));
-        }
-
         if (hasProperty (tags::keyStart) && hasProperty (tags::keyEnd))
         {
             Range<int> range (getProperty (tags::keyStart, 0),

@@ -108,10 +108,7 @@ static const juce::Identifier gain = "gain";
 static const juce::Identifier graphs = "graphs";
 static const juce::Identifier hiddenInMixer = "hiddenInMixer";
 static const juce::Identifier hiddenPorts = "hiddenPorts";
-static const juce::Identifier inputGain = "inputGain";
-/** Comma separated per-input-channel trims in dB. */
-static const juce::Identifier channelGains = "channelGains";
-static const juce::Identifier mappingData = "mappingData";
+static const juce::Identifier inputGain = "inputGain";static const juce::Identifier mappingData = "mappingData";
 static const juce::Identifier map = "map";
 static const juce::Identifier maps = "maps";
 static const juce::Identifier missing = "missing";
