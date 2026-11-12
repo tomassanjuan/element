@@ -99,7 +99,7 @@ struct RootGraphHolder
         done already. Properties are set from the model, so make sure they are
         correct before calling this 
      */
-    bool attach (AudioEnginePtr engine)
+    bool attach (AudioEnginePtr engine, bool load = true)
     {
         EL_LOAD_TRACE (String ("RootGraphHolder::attach: ") + model.getName());
         jassert (engine);
@@ -137,7 +137,10 @@ struct RootGraphHolder
                 controller = std::make_unique<RootGraphManager> (*root, plugins);
                 model.setProperty (tags::object, node.get());
 
-                controller->setNodeModel (model);
+                if (load)
+                    controller->setNodeModel (model);
+                else
+                    controller->unload();
             }
             else
             {
@@ -983,7 +986,9 @@ void EngineService::sessionReloaded()
             Node rootGraph (session->getGraph (i));
             if (auto* holder = graphs->add (new RootGraphHolder (rootGraph, context())))
             {
-                if (! holder->attach (engine))
+                const bool load = rootGraph == session->getActiveGraph()
+                                  || (bool) rootGraph.getProperty (tags::persistent, true);
+                if (! holder->attach (engine, load))
                 {
                     std::clog << "[element] failed attaching root grapn: " << holder->model.getName() << std::endl;
                 }
