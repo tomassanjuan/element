@@ -434,6 +434,9 @@ public:
         minimizeToTray.setEnabled (systray.get());
         unloadInactiveGraphs.init (*this, "Unload inactive graphs", settings.unloadInactiveGraphs(), [this]() {
             settings.setUnloadInactiveGraphs (unloadInactiveGraphs.get());
+            if (auto* engine = gui.sibling<EngineService>())
+                engine->applyGraphUnloadPolicy();
+            gui.nodeSelected();
             settingChanged();
         });
         addAndMakeVisible (startHiddenLabel);

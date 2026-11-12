@@ -602,6 +602,12 @@ void GuiService::activateGraph (int index)
 
     if (auto* c = content())
         c->setCurrentNode (graph);
+
+    // The sidebar and the mixer follow the selected node, like a tree click.
+    if (getSelectedNode() == graph)
+        nodeSelected();
+    else
+        selectNode (graph);
 }
 
 void GuiService::closeAllPluginWindows (const bool visible)

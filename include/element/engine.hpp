@@ -141,6 +141,10 @@ public:
     */
     bool isGraphLoaded (const Node& graph) const;
 
+    /** Unloads every loaded, inactive graph that the unload settings say
+        should not stay loaded. Call after those settings change. */
+    void applyGraphUnloadPolicy();
+
     /** replace a node with a given plugin */
     void replace (const Node&, const juce::PluginDescription&);
 

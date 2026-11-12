@@ -899,6 +899,18 @@ void EngineService::setRootNode (const Node& newRootNode)
     engine->refreshSession();
 }
 
+void EngineService::applyGraphUnloadPolicy()
+{
+    const auto* active = graphs->findActiveInEngine();
+    for (auto* holder : graphs->getGraphs())
+    {
+        if (holder == active || ! holder->attached() || ! holder->getController()->isLoaded())
+            continue;
+        if (! detail::keepsLoadedWhenInactive (context(), holder->model))
+            holder->getController()->unloadGraph();
+    }
+}
+
 bool EngineService::isGraphLoaded (const Node& graph) const
 {
     if (! graph.isRootGraph())

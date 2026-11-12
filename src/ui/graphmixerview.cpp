@@ -387,6 +387,7 @@ public:
     void onNodeSelected()
     {
         model->setNode (ui.getSelectedNode());
+        model->refreshNodes();
         box.updateContent();
         resized();
         repaint();
