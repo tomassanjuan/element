@@ -16,7 +16,7 @@ namespace element {
 namespace {
 constexpr int kMargin = 10;
 constexpr int kRowH = 22;
-constexpr int kGraphH = 24;
+constexpr int kGraphH = 28;
 constexpr int kAvgW = 70;
 
 struct Row
@@ -29,13 +29,13 @@ struct GraphRows
 {
     String name;
     std::vector<Row> rows;
-    float total = 0.f;
+    float total = 0.f, peak = 0.f;
 };
 
 struct Snapshot
 {
     std::vector<GraphRows> graphs;
-    float total = 0.f;
+    float total = 0.f, peak = 0.f;
     double budgetMs = 0.0;
 };
 
@@ -89,9 +89,9 @@ public:
         const int nameW = nameColumnWidth (getWidth());
         for (const auto& gr : snap.graphs)
         {
-            g.setColour (Colors::textColor);
+            r.removeFromTop (kGraphH - kRowH);
             g.setFont (Font (FontOptions (14.f, Font::bold)));
-            g.drawText (gr.name + "  -  " + String (gr.total, 3) + " ms", r.removeFromTop (kGraphH), Justification::bottomLeft, true);
+            drawRow (g, r.removeFromTop (kRowH), nameW, gr.name, gr.total, gr.peak, snap.budgetMs);
             g.setFont (Font (FontOptions (14.f)));
 
             for (const auto& row : gr.rows)
@@ -114,7 +114,7 @@ public:
         viewport.setViewedComponent (&rows, false);
         viewport.setScrollBarsShown (true, false);
         addAndMakeVisible (viewport);
-        startTimerHz (5);
+        startTimerHz (2);
         timerCallback();
     }
 
@@ -152,15 +152,17 @@ public:
                 {
                     gr.rows.push_back ({ node.getDisplayName(), proc->getRenderMsAverage(), proc->getRenderMsPeak() });
                     gr.total += gr.rows.back().avg;
+                    gr.peak += gr.rows.back().peak;
                 }
             }
             std::sort (gr.rows.begin(), gr.rows.end(), [] (const Row& x, const Row& y) { return x.avg > y.avg; });
             snap.total += gr.total;
+            snap.peak += gr.peak;
             snap.graphs.push_back (std::move (gr));
         }
 
         total = snap.total;
-        totalPeak = jmax (total, totalPeak * 0.98f);
+        totalPeak = snap.peak;
         budgetMs = snap.budgetMs;
         rows.setSnapshot (std::move (snap));
         resized();

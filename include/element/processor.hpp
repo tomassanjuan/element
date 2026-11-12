@@ -274,16 +274,34 @@ public:
     /** Records how long one render block took, in milliseconds. Audio thread. */
     void addRenderTime (float ms) noexcept
     {
-        renderMsAverage.store (renderMsAverage.load (std::memory_order_relaxed) * 0.95f + ms * 0.05f, std::memory_order_relaxed);
-        const auto peak = renderMsPeak.load (std::memory_order_relaxed);
-        renderMsPeak.store (ms > peak ? ms : peak * 0.999f, std::memory_order_relaxed);
+        renderMsAverage.store (renderMsAverage.load (std::memory_order_relaxed) * 0.99f + ms * 0.01f, std::memory_order_relaxed);
+
+        const auto second = (juce::uint32) (juce::Time::getMillisecondCounter() / 1000);
+        auto& bucket = renderMsBuckets[second % numRenderMsBuckets];
+        if (bucket.second.load (std::memory_order_relaxed) != second)
+        {
+            bucket.first.store (ms, std::memory_order_relaxed);
+            bucket.second.store (second, std::memory_order_relaxed);
+        }
+        else if (ms > bucket.first.load (std::memory_order_relaxed))
+        {
+            bucket.first.store (ms, std::memory_order_relaxed);
+        }
     }
 
     /** Smoothed render time per block in milliseconds. */
     float getRenderMsAverage() const noexcept { return renderMsAverage.load (std::memory_order_relaxed); }
 
-    /** Render time of the slowest recent block in milliseconds, slowly decaying. */
-    float getRenderMsPeak() const noexcept { return renderMsPeak.load (std::memory_order_relaxed); }
+    /** Render time of the slowest block in the last 10 seconds, in milliseconds. */
+    float getRenderMsPeak() const noexcept
+    {
+        const auto second = (juce::uint32) (juce::Time::getMillisecondCounter() / 1000);
+        float peak = 0.f;
+        for (const auto& b : renderMsBuckets)
+            if (second - b.second.load (std::memory_order_relaxed) < (juce::uint32) numRenderMsBuckets)
+                peak = juce::jmax (peak, b.first.load (std::memory_order_relaxed));
+        return peak;
+    }
 
     void setInputRMS (int chan, float rms, int numSamples);
     float getInputRMS (int chan) const { return (chan < inRMS.size()) ? inRMS.getUnchecked (chan)->value.get() : 0.0f; }
@@ -588,7 +606,9 @@ private:
         AtomicValue<float> peak;  // linear peak with a fall time, written by the audio thread
     };
     juce::OwnedArray<RMSMeter> inRMS, outRMS;
-    std::atomic<float> renderMsAverage { 0.f }, renderMsPeak { 0.f };
+    static constexpr int numRenderMsBuckets = 10;
+    std::atomic<float> renderMsAverage { 0.f };
+    std::array<std::pair<std::atomic<float>, std::atomic<juce::uint32>>, numRenderMsBuckets> renderMsBuckets {};
 
     /** Integrates a block's RMS into the given meter with a fixed time window. */
     void updateRMSMeter (RMSMeter& meter, float blockRMS, int numSamples);
