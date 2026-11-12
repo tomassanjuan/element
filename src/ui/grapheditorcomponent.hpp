@@ -250,8 +250,11 @@ public:
     {
         auto r = getLocalBounds();
         _viewport.setBounds (r);
-        _editor.setSize (jmax (_editor.getWidth(), _viewport.getWidth()),
-                         jmax (_editor.getHeight(), _viewport.getHeight()));
+        juce::Rectangle<int> content;
+        for (auto* child : _editor.getChildren())
+            content = content.getUnion (child->getBounds());
+        _editor.setSize (jmax (content.getRight(), _viewport.getMaximumVisibleWidth()),
+                         jmax (content.getBottom(), _viewport.getMaximumVisibleHeight()));
     }
 
     juce::Viewport& viewport() { return _viewport; }
