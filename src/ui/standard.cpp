@@ -987,7 +987,7 @@ void StandardContent::getCommandInfo (CommandID commandID, ApplicationCommandInf
             int flags = 0;
             if (getMainViewName() == "PatchBay")
                 flags |= Info::isTicked;
-            result.addDefaultKeypress (KeyPress::F1Key, 0);
+            result.addDefaultKeypress (KeyPress::F2Key, 0);
             result.setInfo ("Patch Bay", "Show the patch bay", "UI", flags);
             break;
         }
@@ -996,7 +996,7 @@ void StandardContent::getCommandInfo (CommandID commandID, ApplicationCommandInf
             int flags = 0;
             if (getMainViewName() == EL_VIEW_GRAPH_EDITOR)
                 flags |= Info::isTicked;
-            result.addDefaultKeypress (KeyPress::F2Key, 0);
+            result.addDefaultKeypress (KeyPress::F1Key, 0);
             result.setInfo ("Graph Editor", "Show the graph editor", "UI", flags);
         }
         break;
@@ -1005,7 +1005,7 @@ void StandardContent::getCommandInfo (CommandID commandID, ApplicationCommandInf
             int flags = (showAccessoryView() && getAccessoryViewName() == EL_VIEW_GRAPH_MIXER)
                             ? Info::isTicked
                             : 0;
-            result.addDefaultKeypress (KeyPress::F4Key, 0);
+            result.addDefaultKeypress (KeyPress::F3Key, 0);
             result.setInfo ("Graph Mixer", "Show/hide the graph mixer", "UI", flags);
             break;
         }
@@ -1014,7 +1014,7 @@ void StandardContent::getCommandInfo (CommandID commandID, ApplicationCommandInf
             int flags = (showAccessoryView() && getAccessoryViewName() == EL_VIEW_CONSOLE)
                             ? Info::isTicked
                             : 0;
-            result.addDefaultKeypress (KeyPress::F3Key, 0);
+            result.addDefaultKeypress (KeyPress::F5Key, 0);
             result.setInfo ("Console", "Show the scripting console", "UI", flags);
             break;
         }
@@ -1023,7 +1023,7 @@ void StandardContent::getCommandInfo (CommandID commandID, ApplicationCommandInf
             int flags = (showAccessoryView() && getAccessoryViewName() == EL_VIEW_PERFORMANCE)
                             ? Info::isTicked
                             : 0;
-            result.addDefaultKeypress (KeyPress::F5Key, 0);
+            result.addDefaultKeypress (KeyPress::F4Key, 0);
             result.setInfo ("Performance", "Show engine load and per-node render time", "UI", flags);
             break;
         }
