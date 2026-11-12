@@ -127,6 +127,7 @@ public:
         onClick = [this]() {
             PopupMenu menu;
             menu.addItem (presetDownmix51, "5.1 to Stereo downmix");
+            menu.addItem (presetDownmix51Sub, "5.1 to Stereo + Sub");
             menu.addSeparator();
             // item id encodes the size: ins * 100 + outs
             const std::pair<int, int> sizes[] = { { 2, 2 }, { 4, 4 }, { 6, 2 }, { 6, 6 }, { 8, 2 }, { 8, 8 }, { 10, 10 }, { 12, 12 }, { 16, 16 } };
@@ -144,6 +145,7 @@ public:
     }
 
     static constexpr int presetDownmix51 = 1;
+    static constexpr int presetDownmix51Sub = 2;
 
     /** Called with ins * 100 + outs, or presetDownmix51. */
     std::function<void (int)> onAudioRouterSizeChanged;
@@ -187,6 +189,8 @@ public:
         sizeButton->onAudioRouterSizeChanged = [this] (int code) {
             if (code == AudioRouterSizeButton::presetDownmix51)
                 owner.applyDownmix51();
+            else if (code == AudioRouterSizeButton::presetDownmix51Sub)
+                owner.applyDownmix51 (true);
             else
                 owner.setRouterSize (code / 100, code % 100);
         };
@@ -318,11 +322,11 @@ void AudioRouterEditor::setGainDb (int row, int col, float db)
         node->setGainDb (row, col, db);
 }
 
-void AudioRouterEditor::applyDownmix51()
+void AudioRouterEditor::applyDownmix51 (bool withSub)
 {
     if (auto* const node = getNodeObjectOfType<AudioRouterNode>())
     {
-        node->setDownmix51ToStereo();
+        node->setDownmix51ToStereo (withSub);
         matrix = node->getMatrixState();
         if (autoResize)
             adjustBoundsToMatrixSize (32);
