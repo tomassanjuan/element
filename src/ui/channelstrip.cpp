@@ -65,7 +65,7 @@ ChannelStripComponent::ChannelStripComponent()
     clipLight.onClick = [this]() { resetClip(); };
 
     addAndMakeVisible (levelLabel);
-    levelLabel.setFont (levelLabel.getFont().withHeight (10));
+    levelLabel.setFont (juce::FontOptions (11.f, juce::Font::bold));
     levelLabel.setJustificationType (Justification::centred);
     levelLabel.setTooltip ("Meter level (dB)");
     levelLabel.setInterceptsMouseClicks (false, false);

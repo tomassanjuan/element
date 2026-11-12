@@ -407,25 +407,31 @@ public:
 
         if (auto* dev = devices.getCurrentAudioDevice())
         {
-            String text = "Sample Rate: ";
-            text << String (dev->getCurrentSampleRate() * 0.001, 1) << " KHz";
-            const auto bufSamples = dev->getCurrentBufferSizeSamples();
-            text << ":  Buffer: " << bufSamples << " ("
-                 << String (bufSamples * 1000.0 / jmax (1.0, dev->getCurrentSampleRate()), 1) << " ms)";
+            const auto rate = dev->getCurrentSampleRate();
+            const auto buffer = dev->getCurrentBufferSizeSamples();
+            const auto kHz = rate * 0.001;
+            String text = String (kHz, std::abs (kHz - std::round (kHz)) < 0.001 ? 0 : 1);
+            text << " kHz, buffer " << buffer << " (" << String (buffer * 1000.0 / jmax (1.0, rate), 1) << " ms)";
             sampleRateLabel.setText (text, dontSendNotification);
 
             text.clear();
             String strText = streamingStatus.getValue().toString();
             if (strText.isEmpty())
                 strText = "Running";
-            text << "Engine: " << strText << ":  CPU: " << String (devices.getCpuUsage() * 100.f, 1) << "%"
-                 << ":  Drops: " << devices.getXRunCount();
+            const auto cpu = devices.getCpuUsage() * 100.f;
+            const auto drops = devices.getXRunCount();
+            text << "Engine: " << strText << ", CPU " << String (cpu, 1) << "%, drops " << drops;
             if (engine != nullptr)
             {
                 const int threads = engine->getNumRenderThreads();
-                text << ":  Multithreading: " << (threads > 0 ? "On (" + String (threads) + " threads)" : "Off");
+                text << ", multithreading " << (threads > 0 ? "on (" + String (threads) + " threads)" : "off");
             }
             streamingStatusLabel.setText (text, dontSendNotification);
+            // red above 90 % CPU, amber above 70 % or after any drop
+            streamingStatusLabel.setColour (Label::textColourId,
+                                            cpu > 90.f ? Colour (0xffe5484d)
+                                            : (cpu > 70.f || drops > 0) ? Colour (0xfff2a900)
+                                                                        : Colour (Colors::textColor));
 
             statusLabel.setText (String ("Device: ") + dev->getName(), dontSendNotification);
             statusLabel.setColour (Label::textColourId, Colors::textColor);

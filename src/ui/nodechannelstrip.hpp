@@ -30,7 +30,7 @@ public:
         nodeName.setText ("", dontSendNotification);
         nodeName.setJustificationType (Justification::centredBottom);
         nodeName.setEditable (false, true, false);
-        nodeName.setFont (Font (FontOptions (Style::fontSizeDefault)));
+        nodeName.setFont (Font (FontOptions (Style::fontSizeDefault, Font::bold)));
         nodeName.onTextChange = [this] {
             if (node.isValid())
                 node.setProperty (tags::name, nodeName.getText());
@@ -94,8 +94,8 @@ public:
     void resized() override
     {
         auto r (getLocalBounds());
-        nodeName.setBounds (r.removeFromTop (22).reduced (2));
-        r.removeFromTop (10); // padding between strip title and IO boxes
+        nodeName.setBounds (r.removeFromTop (24).reduced (2, 0));
+        r.removeFromTop (8); // padding between strip title and IO boxes
 
         auto r2 = r.removeFromBottom (jmin (268, r.getHeight()));
         int boxSize = r2.getWidth() - 8;
