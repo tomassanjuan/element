@@ -597,6 +597,9 @@ void GuiService::activateGraph (int index)
     sess->setActiveGraph (index);
     sibling<EngineService>()->setRootNode (graph);
     showPluginWindowsFor (graph, true, false, false);
+
+    if (auto* c = content())
+        c->setCurrentNode (graph);
 }
 
 void GuiService::closeAllPluginWindows (const bool visible)
