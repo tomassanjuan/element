@@ -26,13 +26,8 @@ void DecibelScale::paint (Graphics& g)
 
     lastY = 0;
 
-    drawLabel (g, iecLevel (Level0dB), "0");
-    drawLabel (g, iecLevel (Level3dB), "-3");
-    drawLabel (g, iecLevel (Level6dB), "-6");
-    drawLabel (g, iecLevel (Level10dB), "-10");
-
-    for (float dB = -20.0f; dB > -70.0f; dB -= 10.0f)
-        drawLabel (g, iecScale (dB), String ((int) dB));
+    for (const int dB : { 0, -3, -6, -12, -24, -36, -48, -60 })
+        drawLabel (g, iecScale ((float) dB), String (dB));
 }
 
 void DecibelScale::resized()

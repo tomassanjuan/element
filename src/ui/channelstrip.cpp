@@ -117,7 +117,10 @@ void ChannelStripComponent::resized()
     auto r1 = getLocalBounds().reduced (2);
     // with more than two channels the left column and fader keep their stereo width and the meter takes the rest
     const bool wideMeter = meter.getPortCount() > 2;
-    auto r2 = r1.removeFromRight (wideMeter ? jmax (0, r1.getWidth() - stereoLeftWidth) : r1.getWidth() / 2);
+    // wide enough strips keep the dB scale in its own column beside the meter instead of drawing over it
+    const bool scaleColumn = r1.getWidth() >= stereoWidth - 10;
+    const bool fixedColumns = wideMeter || scaleColumn;
+    auto r2 = r1.removeFromRight (fixedColumns ? jmax (0, r1.getWidth() - stereoLeftWidth) : r1.getWidth() / 2);
 
     gainCaption = r1.removeFromTop (11);
     volume.setBounds (r1.removeFromTop (18).withSizeKeepingCentre (40, 18));
@@ -139,15 +142,17 @@ void ChannelStripComponent::resized()
         muteButton.setBounds (r1.removeFromBottom (18).withSizeKeepingCentre (26, 18));
     }
 
-    const int quarter = wideMeter ? stereoFaderWidth : r2.getWidth() / 2;
+    const int quarter = fixedColumns ? stereoFaderWidth : r2.getWidth() / 2;
     fader.setBounds (r2.removeFromRight (quarter));
-    auto r3 = wideMeter ? r2 : r2.removeFromRight (quarter);
+    auto r3 = fixedColumns ? r2 : r2.removeFromRight (quarter);
+    const auto scaleBounds = scaleColumn ? r3.removeFromLeft (scaleColumnWidth) : juce::Rectangle<int>();
     r3.removeFromTop (4);
     r3.removeFromBottom (4);
     clipLight.setBounds (r3.removeFromTop (6));
     r3.removeFromTop (1);
     meter.setBounds (r3);
-    scale.setBounds (meter.getBoundsInParent());
+    scale.setBounds (scaleColumn ? scaleBounds.withY (meter.getY()).withHeight (meter.getHeight())
+                                 : meter.getBoundsInParent());
 }
 
 void ChannelStripComponent::buttonClicked (Button* b)

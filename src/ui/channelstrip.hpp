@@ -68,7 +68,7 @@ public:
         or wider for more channels. */
     static int widthForChannels (const int numChannels)
     {
-        return numChannels <= 2 ? stereoWidth : juce::jmax ((int) stereoWidth, 65 + 8 * numChannels);
+        return juce::jmax ((int) stereoWidth, stereoWidth - 15 + 8 * numChannels);
     }
 
     /** Sets how many channels the meter shows and re-lays out the strip. */
@@ -173,7 +173,8 @@ public:
     Signal<void()> volumeLabelDoubleClicked;
 
 private:
-    static constexpr int stereoWidth = 80;
+    static constexpr int stereoWidth = 100;
+    static constexpr int scaleColumnWidth = 22;
     static constexpr int stereoLeftWidth = 38;
     static constexpr int stereoFaderWidth = 19;
 

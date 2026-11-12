@@ -553,7 +553,7 @@ public:
             refreshOverview();
             resized();
         };
-        box.setRowHeight (80);
+        box.setRowHeight (ChannelStripComponent::widthForChannels (2));
         model.reset (new GraphMixerListBoxModel (gui, box));
         box.setModel (model.get());
         box.updateContent();
