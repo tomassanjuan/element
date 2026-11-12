@@ -72,7 +72,7 @@ public:
                 return;
 
             PopupMenu menu;
-            const float levels[] = { 6.0f, 3.0f, 0.0f, -3.0f, -6.0f, -9.0f, -12.0f, -18.0f };
+            const float levels[] = { 12.0f, 9.0f, 6.0f, 3.0f, 0.0f, -3.0f, -6.0f, -9.0f, -12.0f, -18.0f };
             for (int i = 0; i < (int) std::size (levels); ++i)
                 menu.addItem (i + 1, String (levels[i], 0) + " dB", true, std::abs (editor.getGainDb (row, col) - levels[i]) < 0.05f);
 
