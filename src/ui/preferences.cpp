@@ -422,15 +422,26 @@ public:
         });
         systray.init (*this, "Show system tray", settings.isSystrayEnabled(), [this]() {
             settings.setSystrayEnabled (systray.get());
-            startHidden.setEnabled (systray.get());
+            startHiddenBox.setEnabled (systray.get());
+            minimizeToTray.setEnabled (systray.get());
             gui.refreshSystemTray();
             settingChanged();
         });
-        startHidden.init (*this, "Start hidden in system tray", settings.isStartHiddenEnabled(), [this]() {
-            settings.setStartHiddenEnabled (startHidden.get());
+        minimizeToTray.init (*this, "Minimize to system tray", settings.isMinimizeToTrayEnabled(), [this]() {
+            settings.setMinimizeToTrayEnabled (minimizeToTray.get());
             settingChanged();
         });
-        startHidden.setEnabled (systray.get());
+        minimizeToTray.setEnabled (systray.get());
+        addAndMakeVisible (startHiddenLabel);
+        startHiddenLabel.setText ("Start hidden in system tray", dontSendNotification);
+        startHiddenLabel.setFont (Font (FontOptions (12.0, Font::bold)));
+        addAndMakeVisible (startHiddenBox);
+        startHiddenBox.addItem ("Off", 1);
+        startHiddenBox.addItem ("Always", 2);
+        startHiddenBox.addItem ("Remember", 3);
+        startHiddenBox.setSelectedId (settings.getStartHiddenMode() + 1, dontSendNotification);
+        startHiddenBox.getSelectedIdAsValue().addListener (this);
+        startHiddenBox.setEnabled (systray.get());
         cableColors.init (*this, "Color graph cables by signal level", settings.isCableLevelColorsEnabled(), [this]() {
             settings.setCableLevelColorsEnabled (cableColors.get());
             settingChanged();
@@ -513,6 +524,7 @@ public:
     {
         clockSource.removeListener (this);
         mainContentBox.getSelectedIdAsValue().removeListener (this);
+        startHiddenBox.getSelectedIdAsValue().removeListener (this);
         meterColorsBox.getSelectedIdAsValue().removeListener (this);
         bridgeModeBox.getSelectedIdAsValue().removeListener (this);
     }
@@ -549,7 +561,8 @@ public:
         layoutSetting (r, askToSaveSession);
         layoutSetting (r, mainContentLabel, mainContentBox, comboWidth);
         layoutSetting (r, systray);
-        layoutSetting (r, startHidden);
+        layoutSetting (r, minimizeToTray);
+        layoutSetting (r, startHiddenLabel, startHiddenBox, comboWidth);
         layoutSetting (r, cableColors);
         layoutSetting (r, desktopScaleLabel, desktopScale, getWidth() / 4);
 
@@ -580,6 +593,11 @@ public:
             engine->applySettings (settings);
             if (auto* cc = ViewHelpers::findContentComponent())
                 cc->refreshToolbar();
+        }
+        else if (value.refersToSameSourceAs (startHiddenBox.getSelectedIdAsValue()))
+        {
+            settings.setStartHiddenMode (startHiddenBox.getSelectedId() - 1);
+            settingChanged();
         }
         else if (value.refersToSameSourceAs (meterColorsBox.getSelectedIdAsValue()))
         {
@@ -625,7 +643,9 @@ private:
     TextButton defaultSessionClearButton;
 
     BoolSettingRow systray;
-    BoolSettingRow startHidden;
+    BoolSettingRow minimizeToTray;
+    Label startHiddenLabel;
+    ComboBox startHiddenBox;
     BoolSettingRow cableColors;
 
     Label desktopScaleLabel;
@@ -665,6 +685,20 @@ public:
         addAndMakeVisible (devs);
         devs.setItemHeight (22);
 
+        addAndMakeVisible (presetLabel);
+        presetLabel.setText ("Audio preset", dontSendNotification);
+        presetLabel.setFont (Font (FontOptions (12.0, Font::bold)));
+        addAndMakeVisible (presetBox);
+        presetBox.setTextWhenNothingSelected ("(none)");
+        presetBox.onChange = [this]() { loadPreset (presetBox.getText()); };
+        addAndMakeVisible (presetSave);
+        presetSave.setButtonText ("Save...");
+        presetSave.onClick = [this]() { askToSavePreset(); };
+        addAndMakeVisible (presetDelete);
+        presetDelete.setButtonText ("Delete");
+        presetDelete.onClick = [this]() { deletePreset (presetBox.getText()); };
+        refreshPresets();
+
         addAndMakeVisible (experimentalLabel);
         experimentalLabel.setText ("Experimental");
         addAndMakeVisible (multithreadingLabel);
@@ -683,6 +717,13 @@ public:
     void resized() override
     {
         Rectangle<int> r (getLocalBounds());
+        auto bar = r.removeFromTop (presetBarHeight).reduced (4, 4);
+        presetDelete.setBounds (bar.removeFromRight (60));
+        bar.removeFromRight (4);
+        presetSave.setBounds (bar.removeFromRight (70));
+        bar.removeFromRight (4);
+        presetLabel.setBounds (bar.removeFromLeft (90));
+        presetBox.setBounds (bar);
         devs.setBounds (r.removeFromTop (devs.getHeight()));
 
         // this will cause the experimental settings to position correctly
@@ -705,10 +746,86 @@ private:
     juce::AudioDeviceSelectorComponent devs;
     [[maybe_unused]] DeviceManager& devices;
 
+    static constexpr int presetBarHeight = 34;
+    static inline const String presetPrefix { "audioPreset_" };
+    Label presetLabel;
+    ComboBox presetBox;
+    TextButton presetSave, presetDelete;
+
+    void refreshPresets (const String& select = {})
+    {
+        presetBox.clear (dontSendNotification);
+        auto* props = settings.getUserSettings();
+        StringArray names;
+        for (auto& key : props->getAllProperties().getAllKeys())
+            if (key.startsWith (presetPrefix))
+                names.add (key.substring (presetPrefix.length()));
+        names.sortNatural();
+        for (int i = 0; i < names.size(); ++i)
+            presetBox.addItem (names[i], i + 1);
+        presetBox.setText (select, dontSendNotification);
+        presetDelete.setEnabled (names.contains (select));
+    }
+
+    void savePreset (const String& name)
+    {
+        if (name.isEmpty())
+            return;
+        if (auto xml = devices.createStateXml())
+        {
+            settings.getUserSettings()->setValue (presetPrefix + name, xml.get());
+            settings.saveIfNeeded();
+        }
+        refreshPresets (name);
+    }
+
+    void loadPreset (const String& name)
+    {
+        presetDelete.setEnabled (name.isNotEmpty());
+        auto xml = settings.getUserSettings()->getXmlValue (presetPrefix + name);
+        if (xml == nullptr)
+            return;
+        const auto error = devices.initialise (DeviceManager::maxAudioChannels,
+                                               DeviceManager::maxAudioChannels,
+                                               xml.get(),
+                                               false,
+                                               "*",
+                                               nullptr);
+        if (error.isNotEmpty())
+            AlertWindow::showMessageBoxAsync (MessageBoxIconType::WarningIcon,
+                                              "Audio preset",
+                                              "Could not apply \"" + name + "\": " + error);
+    }
+
+    void deletePreset (const String& name)
+    {
+        if (name.isEmpty())
+            return;
+        settings.getUserSettings()->removeValue (presetPrefix + name);
+        settings.saveIfNeeded();
+        refreshPresets();
+    }
+
+    void askToSavePreset()
+    {
+        auto* w = new AlertWindow ("Save audio preset",
+                                   "Saves the current audio device, rates and channels under a name.",
+                                   MessageBoxIconType::NoIcon);
+        w->addTextEditor ("name", presetBox.getText());
+        w->addButton ("Save", 1, KeyPress (KeyPress::returnKey));
+        w->addButton ("Cancel", 0, KeyPress (KeyPress::escapeKey));
+        w->enterModalState (true,
+                            ModalCallbackFunction::create ([safe = SafePointer<AudioSettingsComponent> (this), w] (int result) {
+                                if (result == 1 && safe != nullptr)
+                                    safe->savePreset (w->getTextEditorContents ("name").trim());
+                            }),
+                            true);
+    }
+
     void layoutExperimentalSettings()
     {
         Rectangle<int> r (getLocalBounds());
-        r.removeFromTop (devs.getHeight());
+        r.removeFromTop (presetBarHeight + devs.getHeight());
 
         experimentalLabel.setBounds (r.removeFromTop (60));
         auto inner = experimentalLabel.getBounds().reduced (10).withTrimmedTop (10);
@@ -1509,7 +1626,7 @@ void Preferences::setPage (const String& name)
 
 void Preferences::updateSize()
 {
-    setSize (600, 500);
+    setSize (600, 540);
 }
 
 } /* namespace element */

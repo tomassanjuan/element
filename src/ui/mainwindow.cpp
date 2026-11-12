@@ -126,7 +126,7 @@ void MainWindow::closeButtonPressed()
 void MainWindow::minimiseButtonPressed()
 {
     auto& gui = *world.services().find<GuiService>();
-    if (world.settings().isSystrayEnabled())
+    if (world.settings().isSystrayEnabled() && world.settings().isMinimizeToTrayEnabled())
         gui.commands().invokeDirectly (Commands::toggleUserInterface, true);
     else
         DocumentWindow::minimiseButtonPressed();
@@ -134,7 +134,7 @@ void MainWindow::minimiseButtonPressed()
 
 void MainWindow::minimisationStateChanged (bool isNowMinimised)
 {
-    if (! isNowMinimised || ! world.settings().isSystrayEnabled())
+    if (! isNowMinimised || ! world.settings().isSystrayEnabled() || ! world.settings().isMinimizeToTrayEnabled())
         return;
 
     // The native title bar minimises without calling minimiseButtonPressed().

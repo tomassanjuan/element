@@ -46,7 +46,7 @@ static bool shouldStartHidden (Settings& settings)
     if (! SystemTray::isAvailable() || ! settings.isSystrayEnabled())
         return false;
 
-    if (settings.isStartHiddenEnabled())
+    if (settings.getStartHiddenMode() == 1)
         return true;
 
     if (JUCEApplicationBase::getCommandLineParameterArray().contains ("--hidden"))
@@ -403,6 +403,8 @@ void GuiService::saveProperties (PropertiesFile* props)
     {
         props->setValue ("mainWindowState", mainWindow->getWindowStateAsString());
         props->setValue ("mainWindowFullScreen", mainWindow->isFullScreen());
+        props->setValue ("mainWindowMinimised", mainWindow->isMinimised());
+        props->setValue ("mainWindowHidden", ! mainWindow->isOnDesktop());
     }
 
     if (_content)
@@ -771,7 +773,10 @@ void GuiService::run()
     _content->restoreState (pf);
 
     const auto windowState = pf->getValue ("mainWindowState");
-    if (! shouldStartHidden (settings))
+    const bool wasHidden = settings.getStartHiddenMode() == 2
+                           && pf->getBoolValue ("mainWindowHidden", false)
+                           && SystemTray::isAvailable() && settings.isSystrayEnabled();
+    if (! wasHidden && ! shouldStartHidden (settings))
     {
         // Create the native peer before restoring bounds so the window frame is
         // known and the title bar is kept clear of docked taskbars.
@@ -780,6 +785,8 @@ void GuiService::run()
         mainWindow->setVisible (true);
         if (pf->getBoolValue ("mainWindowFullScreen", false))
             mainWindow->setFullScreen (true);
+        else if (pf->getBoolValue ("mainWindowMinimised", false))
+            mainWindow->setMinimised (true);
     }
     else
     {

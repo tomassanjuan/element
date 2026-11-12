@@ -45,6 +45,7 @@ public:
     static const char* oscHostEnabledKey;
     static const char* systrayKey;
     static const char* startHiddenKey;
+    static const char* minimizeToTrayKey;
     static const char* cableLevelColorsKey;
     static const char* midiOutLatencyKey;
     static const char* desktopScaleKey;
@@ -133,10 +134,16 @@ public:
     bool isSystrayEnabled() const;
     void setSystrayEnabled (bool);
 
+    /** Whether minimising the main window hides it to the system tray. */
+    bool isMinimizeToTrayEnabled() const;
+    void setMinimizeToTrayEnabled (bool);
+
     /** True if the main window should start hidden in the system tray.
         Only meaningful when the system tray is enabled and available. */
-    bool isStartHiddenEnabled() const;
-    void setStartHiddenEnabled (bool);
+    /** How the main window starts when the system tray is enabled:
+        0 = Off (shown), 1 = Always hidden, 2 = Remember the last state. */
+    int getStartHiddenMode() const;
+    void setStartHiddenMode (int);
 
     /** True if graph editor audio cables are colored by signal level. */
     bool isCableLevelColorsEnabled() const;

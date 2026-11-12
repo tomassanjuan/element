@@ -33,6 +33,7 @@ const char* Settings::oscHostPortKey = "oscHostPortKey";
 const char* Settings::oscHostEnabledKey = "oscHostEnabledKey";
 const char* Settings::systrayKey = "systrayKey";
 const char* Settings::startHiddenKey = "startHidden";
+const char* Settings::minimizeToTrayKey = "minimizeToTray";
 const char* Settings::cableLevelColorsKey = "cableLevelColors";
 const char* Settings::midiOutLatencyKey = "midiOutLatency";
 const char* Settings::desktopScaleKey = "desktopScale";
@@ -246,9 +247,12 @@ bool Settings::isSystrayEnabled() const
 }
 
 void Settings::setSystrayEnabled (bool enabled) { set (systrayKey, enabled); }
+bool Settings::isMinimizeToTrayEnabled() const { return getBool (minimizeToTrayKey, true); }
+void Settings::setMinimizeToTrayEnabled (bool enabled) { set (minimizeToTrayKey, enabled); }
 
-bool Settings::isStartHiddenEnabled() const { return getBool (startHiddenKey, false); }
-void Settings::setStartHiddenEnabled (bool enabled) { set (startHiddenKey, enabled); }
+// legacy value was a bool: true meant "always"
+int Settings::getStartHiddenMode() const { return jlimit (0, 2, getInt (startHiddenKey, 0)); }
+void Settings::setStartHiddenMode (int mode) { set (startHiddenKey, jlimit (0, 2, mode)); }
 
 bool Settings::isCableLevelColorsEnabled() const { return getBool (cableLevelColorsKey, true); }
 void Settings::setCableLevelColorsEnabled (bool enabled) { set (cableLevelColorsKey, enabled); }
