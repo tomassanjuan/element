@@ -24,6 +24,14 @@ using namespace juce;
 namespace element {
 
 namespace detail {
+/** True if an inactive graph should stay loaded: neither the global unload
+    setting nor the graph's own persistent flag asks for it to be released. */
+static bool keepsLoadedWhenInactive (Context& ctx, const Node& graph)
+{
+    return ! ctx.settings().unloadInactiveGraphs()
+           && (bool) graph.getProperty (tags::persistent, true);
+}
+
 static void initializeRootGraphPorts (RootGraph* root, const Node& model)
 {
     PortArray ins, outs;
@@ -867,7 +875,7 @@ void EngineService::setRootNode (const Node& newRootNode)
         engine->setActiveGraphIndex (index);
 
         if (previous != nullptr && previous != holder && previous->attached()
-            && ! (bool) previous->model.getProperty (tags::persistent, true))
+            && ! detail::keepsLoadedWhenInactive (context(), previous->model))
         {
             // Deferred so the UI has moved to the new graph before the old
             // graph's processors are released.
@@ -877,7 +885,7 @@ void EngineService::setRootNode (const Node& newRootNode)
                 auto* self = ctx.services().find<EngineService>();
                 auto* h = self != nullptr ? self->graphs->findFor (previousModel) : nullptr;
                 if (h == nullptr || ! h->attached() || h == self->graphs->findActiveInEngine()
-                    || (bool) h->model.getProperty (tags::persistent, true))
+                    || detail::keepsLoadedWhenInactive (ctx, h->model))
                     return;
                 h->getController()->unloadGraph();
             });
@@ -889,6 +897,15 @@ void EngineService::setRootNode (const Node& newRootNode)
     }
 
     engine->refreshSession();
+}
+
+bool EngineService::isGraphLoaded (const Node& graph) const
+{
+    if (! graph.isRootGraph())
+        return true;
+    const auto* holder = graphs->findFor (graph);
+    const auto* controller = holder != nullptr ? holder->getController() : nullptr;
+    return controller != nullptr && controller->isLoaded();
 }
 
 void EngineService::syncModels()
@@ -987,7 +1004,7 @@ void EngineService::sessionReloaded()
             if (auto* holder = graphs->add (new RootGraphHolder (rootGraph, context())))
             {
                 const bool load = rootGraph == session->getActiveGraph()
-                                  || (bool) rootGraph.getProperty (tags::persistent, true);
+                                  || detail::keepsLoadedWhenInactive (context(), rootGraph);
                 if (! holder->attach (engine, load))
                 {
                     std::clog << "[element] failed attaching root grapn: " << holder->model.getName() << std::endl;

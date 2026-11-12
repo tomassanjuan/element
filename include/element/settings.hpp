@@ -46,6 +46,7 @@ public:
     static const char* systrayKey;
     static const char* startHiddenKey;
     static const char* minimizeToTrayKey;
+    static const char* unloadInactiveGraphsKey;
     static const char* cableLevelColorsKey;
     static const char* midiOutLatencyKey;
     static const char* desktopScaleKey;
@@ -133,6 +134,11 @@ public:
 
     bool isSystrayEnabled() const;
     void setSystrayEnabled (bool);
+
+    /** Whether every graph that is not active gets unloaded, regardless of
+        its own "persistent" property. */
+    bool unloadInactiveGraphs() const;
+    void setUnloadInactiveGraphs (bool);
 
     /** Whether minimising the main window hides it to the system tray. */
     bool isMinimizeToTrayEnabled() const;

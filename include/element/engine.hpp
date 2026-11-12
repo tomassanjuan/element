@@ -133,6 +133,14 @@ public:
     /** called when the session loads or re-loads */
     void sessionReloaded();
 
+    /** Whether a root graph currently has its nodes loaded in the engine.
+
+        @param graph the root graph to check
+        @return false if the graph is unloaded; true for loaded graphs and
+                for nodes that aren't root graphs
+    */
+    bool isGraphLoaded (const Node& graph) const;
+
     /** replace a node with a given plugin */
     void replace (const Node&, const juce::PluginDescription&);
 

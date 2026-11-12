@@ -1,6 +1,7 @@
 // Copyright 2019-2023 Kushview, LLC <info@kushview.net>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include <element/engine.hpp>
 #include <element/services.hpp>
 #include <element/ui/style.hpp>
 #include <element/ui/meterbridge.hpp>
@@ -235,11 +236,19 @@ public:
         refreshNodes();
     }
 
+    /** True if the graph being shown is unloaded, so there is nothing live to display. */
+    bool isUnloaded() const { return unloaded; }
+
     void refreshNodes()
     {
         nodes.clearQuick();
         const auto graph = _node.isGraph() ? _node
                                            : gui.context().session()->getActiveGraph();
+        auto* engine = gui.sibling<EngineService>();
+        unloaded = engine != nullptr && ! engine->isGraphLoaded (graph);
+        if (unloaded)
+            return;
+
         for (int i = 0; i < graph.getNumNodes(); ++i)
         {
             const auto n = graph.getNode (i);
@@ -303,6 +312,7 @@ private:
     HorizontalListBox& box;
     Node _node;
     NodeArray nodes;
+    bool unloaded = false;
     [[maybe_unused]] bool dragging = false;
 };
 
@@ -378,6 +388,8 @@ public:
     {
         model->setNode (ui.getSelectedNode());
         box.updateContent();
+        resized();
+        repaint();
     }
 
     void resized() override
@@ -385,8 +397,9 @@ public:
         auto r = getLocalBounds();
         meterToggle.setBounds (r.removeFromRight (24).removeFromTop (28).reduced (1));
 
-        meterView.setVisible (sShowMixerMeterBridge);
-        if (sShowMixerMeterBridge)
+        const bool showBridge = sShowMixerMeterBridge && (model == nullptr || ! model->isUnloaded());
+        meterView.setVisible (showBridge);
+        if (showBridge)
             meterView.setBounds (r.removeFromRight (jmax (40, meterView.meterBridge().preferredWidth() + 8)));
 
         box.setBounds (r);
@@ -401,7 +414,7 @@ public:
         {
             g.setColour (Colors::textColor);
             g.setFont (Font (FontOptions (15.f)));
-            g.drawText (TRANS ("No channels to display"),
+            g.drawText (model->isUnloaded() ? TRANS ("Graph unloaded") : TRANS ("No channels to display"),
                         getLocalBounds().toFloat(),
                         Justification::centred);
         }
@@ -411,6 +424,7 @@ public:
     {
         model->refreshNodes();
         box.updateContent();
+        resized();
         repaint();
     }
 

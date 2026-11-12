@@ -432,6 +432,10 @@ public:
             settingChanged();
         });
         minimizeToTray.setEnabled (systray.get());
+        unloadInactiveGraphs.init (*this, "Unload inactive graphs", settings.unloadInactiveGraphs(), [this]() {
+            settings.setUnloadInactiveGraphs (unloadInactiveGraphs.get());
+            settingChanged();
+        });
         addAndMakeVisible (startHiddenLabel);
         startHiddenLabel.setText ("Start hidden in system tray", dontSendNotification);
         startHiddenLabel.setFont (Font (FontOptions (12.0, Font::bold)));
@@ -562,6 +566,7 @@ public:
         layoutSetting (r, mainContentLabel, mainContentBox, comboWidth);
         layoutSetting (r, systray);
         layoutSetting (r, minimizeToTray);
+        layoutSetting (r, unloadInactiveGraphs);
         layoutSetting (r, startHiddenLabel, startHiddenBox, comboWidth);
         layoutSetting (r, cableColors);
         layoutSetting (r, desktopScaleLabel, desktopScale, getWidth() / 4);
@@ -644,6 +649,7 @@ private:
 
     BoolSettingRow systray;
     BoolSettingRow minimizeToTray;
+    BoolSettingRow unloadInactiveGraphs;
     Label startHiddenLabel;
     ComboBox startHiddenBox;
     BoolSettingRow cableColors;

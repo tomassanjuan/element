@@ -34,6 +34,7 @@ const char* Settings::oscHostEnabledKey = "oscHostEnabledKey";
 const char* Settings::systrayKey = "systrayKey";
 const char* Settings::startHiddenKey = "startHidden";
 const char* Settings::minimizeToTrayKey = "minimizeToTray";
+const char* Settings::unloadInactiveGraphsKey = "unloadInactiveGraphs";
 const char* Settings::cableLevelColorsKey = "cableLevelColors";
 const char* Settings::midiOutLatencyKey = "midiOutLatency";
 const char* Settings::desktopScaleKey = "desktopScale";
@@ -247,6 +248,9 @@ bool Settings::isSystrayEnabled() const
 }
 
 void Settings::setSystrayEnabled (bool enabled) { set (systrayKey, enabled); }
+bool Settings::unloadInactiveGraphs() const { return getBool (unloadInactiveGraphsKey, false); }
+void Settings::setUnloadInactiveGraphs (bool unload) { set (unloadInactiveGraphsKey, unload); }
+
 bool Settings::isMinimizeToTrayEnabled() const { return getBool (minimizeToTrayKey, true); }
 void Settings::setMinimizeToTrayEnabled (bool enabled) { set (minimizeToTrayKey, enabled); }
 
