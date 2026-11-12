@@ -769,6 +769,7 @@ void GraphManager::savePluginStates()
 void GraphManager::unload()
 {
     savePluginStates();
+    bindings.clear();
     processor.clear();
     for (int i = 0; i < nodes.getNumChildren(); ++i)
         Node::sanitizeRuntimeProperties (nodes.getChild (i), true);

@@ -866,9 +866,18 @@ void EngineService::setRootNode (const Node& newRootNode)
         if (previous != nullptr && previous != holder && previous->attached()
             && ! (bool) previous->model.getProperty (tags::persistent, true))
         {
-            if (auto* gui = sibling<GuiService>())
-                gui->closeAllPluginWindows();
-            previous->getController()->unloadGraph();
+            // Deferred so the UI has moved to the new graph before the old
+            // graph's processors are released.
+            auto& ctx = context();
+            const Node previousModel (previous->model);
+            MessageManager::callAsync ([&ctx, previousModel] {
+                auto* self = ctx.services().find<EngineService>();
+                auto* h = self != nullptr ? self->graphs->findFor (previousModel) : nullptr;
+                if (h == nullptr || ! h->attached() || h == self->graphs->findActiveInEngine()
+                    || (bool) h->model.getProperty (tags::persistent, true))
+                    return;
+                h->getController()->unloadGraph();
+            });
         }
     }
     else
