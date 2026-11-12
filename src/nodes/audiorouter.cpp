@@ -18,6 +18,7 @@ AudioRouterNode::AudioRouterNode (int ins, int outs)
       nextToggles (ins, outs)
 {
     setName ("Audio Router");
+    resetGains();
 
     fadeIn.setFadesIn (true);
     fadeIn.setLength (fadeLengthSeconds);
@@ -122,6 +123,7 @@ void AudioRouterNode::setSize (int newIns, int newOuts, bool async)
         toggles.swapWith (newPatches);
         numSources = newIns;
         numDestinations = newOuts;
+        resetGains();
         sizeChanged = true; // initiate the size change
     }
 
@@ -137,6 +139,58 @@ void AudioRouterNode::setSize (int newIns, int newOuts, bool async)
     }
 
     sendChangeMessage();
+}
+
+void AudioRouterNode::resetGains()
+{
+    ScopedLock sl (lock);
+    gains.assign ((size_t) (numSources * numDestinations), 1.0f);
+    appliedGains = gains;
+}
+
+float AudioRouterNode::getGainDb (int src, int dst) const
+{
+    ScopedLock sl (lock);
+    if (src < 0 || src >= numSources || dst < 0 || dst >= numDestinations)
+        return 0.0f;
+    return Decibels::gainToDecibels (gains[(size_t) (src * numDestinations + dst)], -100.0f);
+}
+
+void AudioRouterNode::setGainDb (int src, int dst, float db)
+{
+    {
+        ScopedLock sl (lock);
+        if (src < 0 || src >= numSources || dst < 0 || dst >= numDestinations)
+            return;
+        gains[(size_t) (src * numDestinations + dst)] = Decibels::decibelsToGain (jlimit (-100.0f, 24.0f, db), -100.0f);
+    }
+
+    sendChangeMessage();
+}
+
+void AudioRouterNode::setDownmix51ToStereo()
+{
+    setSize (6, 2, false);
+
+    MatrixState m (6, 2);
+    m.set (0, 0, true); // L  -> L
+    m.set (2, 0, true); // C  -> L
+    m.set (4, 0, true); // Ls -> L
+    m.set (1, 1, true); // R  -> R
+    m.set (2, 1, true); // C  -> R
+    m.set (5, 1, true); // Rs -> R
+
+    {
+        ScopedLock sl (lock);
+        const auto minus3dB = Decibels::decibelsToGain (-3.0f);
+        gains.assign (gains.size(), 1.0f);
+        const std::pair<int, int> attenuated[] = { { 2, 0 }, { 4, 0 }, { 2, 1 }, { 5, 1 } };
+        for (const auto& [src, dst] : attenuated)
+            gains[(size_t) (src * numDestinations + dst)] = minus3dB;
+        appliedGains = gains;
+    }
+
+    setMatrixState (m);
 }
 
 void AudioRouterNode::setMatrixState (const MatrixState& matrix)
@@ -208,11 +262,12 @@ void AudioRouterNode::render (RenderContext& rc)
             {
                 for (int j = 0; j < numDestinations; ++j)
                 {
+                    const auto g = gains[(size_t) (i * numDestinations + j)];
                     if (toggles.get (i, j) && nextToggles.get (i, j))
                     {
                         // no patch change and on means 1 to 1 mix
                         tempAudio.getWritePointer (j)[frame] +=
-                            rc.audio.getReadPointer (i)[frame];
+                            rc.audio.getReadPointer (i)[frame] * g;
                     }
                     else if (! toggles.get (i, j) && ! nextToggles.get (i, j))
                     {
@@ -222,12 +277,12 @@ void AudioRouterNode::render (RenderContext& rc)
                     else if (! toggles.get (i, j) && nextToggles.get (i, j))
                     {
                         tempAudio.getWritePointer (j)[frame] +=
-                            (rc.audio.getReadPointer (i)[frame] * fadeInGain);
+                            (rc.audio.getReadPointer (i)[frame] * fadeInGain * g);
                     }
                     else if (toggles.get (i, j) && ! nextToggles.get (i, j))
                     {
                         tempAudio.getWritePointer (j)[frame] +=
-                            (rc.audio.getReadPointer (i)[frame] * fadeOutGain);
+                            (rc.audio.getReadPointer (i)[frame] * fadeOutGain * g);
                     }
                 }
             }
@@ -251,10 +306,11 @@ void AudioRouterNode::render (RenderContext& rc)
                 {
                     for (int j = 0; j < numDestinations; ++j)
                     {
+                        const auto g = gains[(size_t) (i * numDestinations + j)];
                         if (toggles.get (i, j) && nextToggles.get (i, j))
                         {
                             // no patch change and on means 1 to 1 mix
-                            tempAudio.addFrom (j, frame, rc.audio.getReadPointer (i, frame), framesToProcess);
+                            tempAudio.addFrom (j, frame, rc.audio.getReadPointer (i, frame), framesToProcess, g);
                         }
                         else if (! toggles.get (i, j) && ! nextToggles.get (i, j))
                         {
@@ -263,11 +319,11 @@ void AudioRouterNode::render (RenderContext& rc)
                         }
                         else if (! toggles.get (i, j) && nextToggles.get (i, j))
                         {
-                            tempAudio.addFromWithRamp (j, frame, rc.audio.getReadPointer (i, frame), framesToProcess, fadeInGain, 1.0f);
+                            tempAudio.addFromWithRamp (j, frame, rc.audio.getReadPointer (i, frame), framesToProcess, fadeInGain * g, g);
                         }
                         else if (toggles.get (i, j) && ! nextToggles.get (i, j))
                         {
-                            tempAudio.addFromWithRamp (j, frame, rc.audio.getReadPointer (i, frame), framesToProcess, fadeOutGain, 0.0f);
+                            tempAudio.addFromWithRamp (j, frame, rc.audio.getReadPointer (i, frame), framesToProcess, fadeOutGain * g, 0.0f);
                         }
                         else
                         {
@@ -279,15 +335,25 @@ void AudioRouterNode::render (RenderContext& rc)
             }
 
             toggles.swapWith (nextToggles);
+            appliedGains = gains;
         }
     }
     else
     {
         ScopedLock sl (lock);
         for (int i = 0; i < numSources; ++i)
+        {
             for (int j = 0; j < numDestinations; ++j)
-                if (toggles.get (i, j))
-                    tempAudio.addFrom (j, 0, rc.audio, i, 0, numFrames);
+            {
+                if (! toggles.get (i, j))
+                    continue;
+
+                // ramp over the block so gain changes don't click
+                const auto idx = (size_t) (i * numDestinations + j);
+                tempAudio.addFromWithRamp (j, 0, rc.audio.getReadPointer (i), numFrames, appliedGains[idx], gains[idx]);
+                appliedGains[idx] = gains[idx];
+            }
+        }
     }
 
     for (int c = 0; c < numChannels; ++c)
@@ -298,7 +364,15 @@ void AudioRouterNode::render (RenderContext& rc)
 void AudioRouterNode::getState (MemoryBlock& block)
 {
     MemoryOutputStream stream (block, false);
-    state.createValueTree().writeToStream (stream);
+    auto tree = state.createValueTree();
+    {
+        ScopedLock sl (lock);
+        StringArray dbs;
+        for (auto g : gains)
+            dbs.add (String (Decibels::gainToDecibels (g, -100.0f), 2));
+        tree.setProperty ("gainsDb", dbs.joinIntoString (","), nullptr);
+    }
+    tree.writeToStream (stream);
 }
 
 void AudioRouterNode::setState (const void* data, int sizeInBytes)
@@ -322,6 +396,16 @@ void AudioRouterNode::setState (const void* data, int sizeInBytes)
                 numDestinations = matrix.getNumColumns();
                 nextToggles.swapWith (newNextPatches);
                 toggles.swapWith (newPatches);
+                resetGains();
+
+                const auto dbs = StringArray::fromTokens (tree.getProperty ("gainsDb").toString(), ",", "");
+                if (dbs.size() == (int) gains.size())
+                {
+                    for (int k = 0; k < dbs.size(); ++k)
+                        gains[(size_t) k] = Decibels::decibelsToGain (dbs[k].getFloatValue(), -100.0f);
+                    appliedGains = gains;
+                }
+
                 sizeChanged = true;
             }
 

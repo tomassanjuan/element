@@ -33,6 +33,14 @@ public:
     void setWithoutLocking (int src, int dst, bool set);
     juce::CriticalSection& getLock() { return lock; }
 
+    /** Level of a patched crosspoint in dB (0 dB = unity, the default). */
+    float getGainDb (int src, int dst) const;
+    void setGainDb (int src, int dst, float db);
+
+    /** Resize to 6x2 and patch a 5.1 (L R C LFE Ls Rs) to stereo downmix:
+        centre and surrounds at -3 dB, LFE dropped. */
+    void setDownmix51ToStereo();
+
     int getNumPrograms() const override { return juce::jmax (1, programs.size()); }
     int getCurrentProgram() const override { return currentProgram; }
     void setCurrentProgram (int index) override;
@@ -114,6 +122,10 @@ private:
 
     void set (int src, int dst, bool patched);
     void clearPatches();
+
+    // linear gain per crosspoint, index src * numDestinations + dst. guarded by lock.
+    std::vector<float> gains, appliedGains;
+    void resetGains();
 
     // used by the UI, but not the rendering
     MatrixState state;
