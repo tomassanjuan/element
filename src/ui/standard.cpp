@@ -427,7 +427,7 @@ StandardContent::StandardContent (Context& ctl_)
     nav->setSize (304, getHeight());
     resizerMouseUp();
     if (auto gp = nav->findPanel<GraphSettingsView>())
-        nav->expandPanelFully (gp, false);
+        nav->setPanelSize (gp, 250, false);
     if (auto stp = nav->findPanel<SessionTreePanel>())
         nav->setPanelSize (stp, 200, false);
 

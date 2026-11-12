@@ -177,7 +177,6 @@ public:
     virtual void drawStretchableLayoutResizerBar (juce::Graphics&, int w, int h, bool isVerticalBar, bool isMouseOver, bool isMouseDragging) override;
 
 
-    virtual void drawConcertinaPanelHeader (juce::Graphics&, const juce::Rectangle<int>& area, bool isMouseOver, bool isMouseDown, juce::ConcertinaPanel&, juce::Component&) override;
 
     static void createTabTextLayout (const juce::TabBarButton& button, float length, float depth, juce::Colour colour, juce::TextLayout&);
 

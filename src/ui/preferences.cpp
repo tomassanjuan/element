@@ -7,6 +7,7 @@
 #include <element/devices.hpp>
 #include <element/plugins.hpp>
 #include <element/settings.hpp>
+#include <element/engine.hpp>
 #include <element/ui.hpp>
 #include <element/ui/content.hpp>
 #include <element/ui/mainwindow.hpp>
