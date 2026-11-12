@@ -1023,6 +1023,7 @@ void StandardContent::getCommandInfo (CommandID commandID, ApplicationCommandInf
             int flags = (showAccessoryView() && getAccessoryViewName() == EL_VIEW_PERFORMANCE)
                             ? Info::isTicked
                             : 0;
+            result.addDefaultKeypress (KeyPress::F5Key, 0);
             result.setInfo ("Performance", "Show engine load and per-node render time", "UI", flags);
             break;
         }

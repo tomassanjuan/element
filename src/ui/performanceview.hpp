@@ -8,7 +8,7 @@
 
 namespace element {
 
-/** Shows audio engine load and the render time of each node in the active graph. */
+/** Shows audio engine load and the render time of each node in each loaded graph. */
 class PerformanceView : public ContentView
 {
 public:
