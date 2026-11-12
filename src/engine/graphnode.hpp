@@ -118,7 +118,11 @@ public:
         If this isn't allowed (e.g. because you're trying to connect a midi channel
         to an audio one or other such nonsense), then it'll return false.
     */
-    bool addConnection (uint32 sourceNode, uint32 sourcePort, uint32 destNode, uint32 destPort);
+    bool addConnection (uint32 sourceNode, uint32 sourcePort, uint32 destNode, uint32 destPort, float gain = 1.0f);
+
+    /** Sets the linear gain of an existing connection and schedules a rebuild
+        of the render sequence. Returns false if there is no such connection. */
+    bool setConnectionGain (uint32 sourceNode, uint32 sourcePort, uint32 destNode, uint32 destPort, float gain);
 
     /** Connect two ports by channel number */
     bool connectChannels (PortType type, uint32 sourceNode, int32 sourceChannel, uint32 destNode, int32 destChannel);

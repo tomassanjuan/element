@@ -340,6 +340,12 @@ void EngineService::addConnection (const uint32 s, const uint32 sp, const uint32
         controller->addConnection (s, sp, d, dp);
 }
 
+void EngineService::setConnectionGain (const uint32 s, const uint32 sp, const uint32 d, const uint32 dp, const float db, const Node& graph)
+{
+    if (auto* controller = graphs->findGraphManagerFor (graph))
+        controller->setConnectionGain (s, sp, d, dp, db);
+}
+
 void EngineService::addGraph()
 {
     auto& world = context();

@@ -638,6 +638,15 @@ bool GraphManager::addConnection (uint32 sourceFilterUID, int sourcePort, uint32
     return result;
 }
 
+bool GraphManager::setConnectionGain (uint32 sourceNode, uint32 sourcePort, uint32 destNode, uint32 destPort, float db)
+{
+    const auto gain = juce::Decibels::decibelsToGain (juce::jlimit (-100.0f, 24.0f, db), -100.0f);
+    const bool result = processor.setConnectionGain (sourceNode, sourcePort, destNode, destPort, gain);
+    if (result)
+        processorArcsChanged();
+    return result;
+}
+
 void GraphManager::removeConnection (const int index)
 {
     processor.removeConnection (index);
@@ -720,7 +729,7 @@ void GraphManager::setNodeModel (const Node& node)
             DBG("connection " << src->getName() << " to " << dst->getName());
         }
 #endif
-        bool worked = processor.addConnection (sourceNode, (uint32) (int) arc.getProperty (tags::sourcePort), destNode, (uint32) (int) arc.getProperty (tags::destPort));
+        bool worked = processor.addConnection (sourceNode, (uint32) (int) arc.getProperty (tags::sourcePort), destNode, (uint32) (int) arc.getProperty (tags::destPort), Node::arcFromValueTree (arc).gain);
 
         if (worked)
         {

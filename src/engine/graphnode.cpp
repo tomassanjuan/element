@@ -246,16 +246,32 @@ bool GraphNode::canConnect (const uint32 sourceNode, const uint32 sourcePort, co
     return getConnectionBetween (sourceNode, sourcePort, destNode, destPort) == nullptr;
 }
 
-bool GraphNode::addConnection (const uint32 sourceNode, const uint32 sourcePort, const uint32 destNode, const uint32 destPort)
+bool GraphNode::addConnection (const uint32 sourceNode, const uint32 sourcePort, const uint32 destNode, const uint32 destPort, const float gain)
 {
     if (! canConnect (sourceNode, sourcePort, destNode, destPort))
         return false;
 
     ArcSorter sorter;
     Connection* c = new Connection (sourceNode, sourcePort, destNode, destPort);
+    c->gain = gain;
     connections.addSorted (sorter, c);
     triggerAsyncUpdate();
     return true;
+}
+
+bool GraphNode::setConnectionGain (const uint32 sourceNode, const uint32 sourcePort, const uint32 destNode, const uint32 destPort, const float gain)
+{
+    const Connection probe (sourceNode, sourcePort, destNode, destPort);
+    ArcSorter sorter;
+    const int index = connections.indexOfSorted (sorter, &probe);
+    if (auto* c = connections[index])
+    {
+        c->gain = gain;
+        triggerAsyncUpdate();
+        return true;
+    }
+
+    return false;
 }
 
 bool GraphNode::connectChannels (PortType type, uint32 sourceNode, int32 sourceChannel, uint32 destNode, int32 destChannel)

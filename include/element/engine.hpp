@@ -98,6 +98,9 @@ public:
     /** Add a connection on a specific graph */
     void addConnection (const uint32 s, const uint32 sp, const uint32 d, const uint32 dp, const Node& graph);
 
+    /** Sets the level (dB) of an audio connection in the given graph. */
+    void setConnectionGain (const uint32 s, const uint32 sp, const uint32 d, const uint32 dp, const float db, const Node& graph);
+
     void connectChannels (const Node& graph, const Node& src, const int sc, const Node& dst, const int dc);
 
     void connectChannels (const Node& graph, const uint32 s, const int sc, const uint32 d, const int dc);

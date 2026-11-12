@@ -77,6 +77,19 @@ public:
         so hand the wheel to them. Shift (or a sideways wheel) scrolls horizontally. */
     void mouseWheelMove (const juce::MouseEvent& ev, const juce::MouseWheelDetails& wheel) override
     {
+        if (ev.mods.isAltDown())
+        {
+            // Alt + wheel over a connected audio cell trims its level
+            const int row = getRowForPixel (ev.y);
+            const int col = getColumnForPixel (ev.x);
+            if (row >= 0 && col >= 0 && row < getNumRows() && col < getNumColumns() && isGainCell (row, col))
+            {
+                const float step = ev.mods.isShiftDown() ? 0.1f : 0.5f;
+                setGainDb (row, col, getGainDb (row, col) + (wheel.deltaY > 0 ? step : -step));
+            }
+            return;
+        }
+
         auto* quads = findParentComponentOfClass<QuadrantLayout>();
         if (quads == nullptr)
             return;
@@ -134,6 +147,58 @@ public:
                              : Colour (LookAndFeel_E1::defaultMatrixCellOffColor));
             g.fillRect (0, 0, width - gridPadding, height - gridPadding);
         }
+
+        if (matrix.connected (row, column) && isGainCell (row, column))
+        {
+            const auto db = getGainDb (row, column);
+            if (std::abs (db) >= 0.05f)
+            {
+                g.setColour (Colours::white);
+                g.setFont (11.0f);
+                g.drawText (String (db, 1), 0, 0, width - gridPadding, height - gridPadding, Justification::centred, false);
+            }
+        }
+    }
+
+    /** True if the cell holds an audio connection whose level can be set. */
+    bool isGainCell (const int row, const int col)
+    {
+        return matrix.connected (row, col) && getPort (row, true).getType().isAudio() && getPort (col, false).getType().isAudio();
+    }
+
+    ValueTree getArc (const int row, const int col)
+    {
+        const ValueTree arcs (nodeModels.getParent().getChildWithName (tags::arcs));
+        return findArc (arcs, getNode (row, true).getNodeId(), getPort (row, true).index(), getNode (col, false).getNodeId(), getPort (col, false).index());
+    }
+
+    float getGainDb (const int row, const int col)
+    {
+        const auto arc = getArc (row, col);
+        return arc.isValid() ? (float) (double) arc.getProperty (tags::gain, 0.0) : 0.0f;
+    }
+
+    void setGainDb (const int row, const int col, const float db)
+    {
+        ViewHelpers::postMessageFor (this, new ChangeConnectionGainMessage (Node (graphModel, false),
+                                                                            getNode (row, true).getNodeId(),
+                                                                            getPort (row, true).index(),
+                                                                            getNode (col, false).getNodeId(),
+                                                                            getPort (col, false).index(),
+                                                                            jlimit (-100.0f, 24.0f, db)));
+    }
+
+    void showGainMenu (const int row, const int col)
+    {
+        PopupMenu menu;
+        const float levels[] = { 6.0f, 3.0f, 0.0f, -3.0f, -6.0f, -9.0f, -12.0f, -18.0f };
+        const auto current = getGainDb (row, col);
+        for (int i = 0; i < (int) std::size (levels); ++i)
+            menu.addItem (i + 1, String (levels[i], 0) + " dB", true, std::abs (current - levels[i]) < 0.05f);
+
+        const auto result = menu.show();
+        if (result > 0)
+            setGainDb (row, col, levels[result - 1]);
     }
 
     void matrixCellClicked (const int row, const int col, const MouseEvent& ev) override
@@ -146,7 +211,8 @@ public:
 
         if (ev.mods.isPopupMenu())
         {
-            // noop
+            if (isGainCell (row, col))
+                showGainMenu (row, col);
             return;
         }
 

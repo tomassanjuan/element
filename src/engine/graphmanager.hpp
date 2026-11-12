@@ -77,6 +77,9 @@ public:
 
     bool addConnection (uint32 sourceFilterUID, int sourceFilterChannel, uint32 destFilterUID, int destFilterChannel);
 
+    /** Sets the gain (dB) of an existing audio connection and rebuilds the arcs model. */
+    bool setConnectionGain (uint32 sourceNode, uint32 sourcePort, uint32 destNode, uint32 destPort, float db);
+
     void removeConnection (const int index);
 
     void removeConnection (uint32 sourceNode, uint32 sourcePort, uint32 destNode, uint32 destPort);
