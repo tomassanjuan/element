@@ -25,6 +25,10 @@ public:
         markerColourId = 0x11112222
     };
 
+    /** Meter length per unit of IEC deflection. IEC deflection is 1.075 at +3 dB,
+        so this puts +3 dB on the top edge of the meter and its scale. */
+    static constexpr float lengthScale = 1.0f / 1.075f;
+
     DecibelScale();
     ~DecibelScale();
 

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <element/ui/simplemeter.hpp>
+#include <element/ui/decibelscale.hpp>
 
 // Meter level limits (in dB).
 #define DIGITAL_METER_MAX_DB (+4.0f)
@@ -277,7 +278,7 @@ void SimpleMeter::resized()
     }
 
     const int length = horizontal ? getWidth() : getHeight();
-    scale = 0.85f * (float) length;
+    scale = DecibelScale::lengthScale * (float) length;
 
     levels[Color0dB] = getIECScale (0.0f);
     levels[Color3dB] = getIECScale (-3.0f);

@@ -27,13 +27,13 @@ void DecibelScale::paint (Graphics& g)
     lastY = 0;
 
     // scale marks, positioned on the IEC curve
-    for (const int dB : { 3, 0, -6, -12, -18, -24, -36, -48, -60 })
+    for (const int dB : { 3, 0, -6, -12, -18, -24, -30, -36, -48, -60 })
         drawLabel (g, iecScale ((float) dB), dB > 0 ? "+" + String (dB) : String (dB));
 }
 
 void DecibelScale::resized()
 {
-    scale = 0.85f * getHeight();
+    scale = lengthScale * getHeight();
 
     levels[Level0dB] = iecScale (0.0f);
     levels[Level3dB] = iecScale (-3.0f);
