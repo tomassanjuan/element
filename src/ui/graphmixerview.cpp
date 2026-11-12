@@ -529,6 +529,7 @@ public:
         meterView.initializeView (gui.services());
         meterView.didBecomeActive();
         meterView.meterBridge().setVuStyle (true);
+        meterView.meterBridge().setMeterSize (26);
         meterView.onConfigChanged = [this]() { resized(); };
 
         addAndMakeVisible (meterToggle);
@@ -629,9 +630,9 @@ public:
     void resized() override
     {
         auto r = getLocalBounds();
-        auto side = r.removeFromRight (24);
-        meterToggle.setBounds (side.removeFromTop (28).reduced (1));
-        overviewToggle.setBounds (side.removeFromTop (28).reduced (1));
+        auto side = r.removeFromRight (toggleColumnWidth);
+        meterToggle.setBounds (side.removeFromTop (26).reduced (2, 1));
+        overviewToggle.setBounds (side.removeFromTop (26).reduced (2, 1));
 
         const bool showBridge = sShowMixerMeterBridge && (model == nullptr || ! model->isUnloaded());
         meterView.setVisible (showBridge);
@@ -671,6 +672,7 @@ public:
     }
 
 private:
+    static constexpr int toggleColumnWidth = 40;
     UI& ui;
     SessionPtr session;
     [[maybe_unused]] GraphMixerView& view;

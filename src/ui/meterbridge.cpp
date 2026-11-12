@@ -146,7 +146,10 @@ struct VuLevelMeter : public Component,
         g.setColour (clip.isClipped() ? Colours::red : Colour (0xff101010));
         g.fillRect (box);
 
-        g.setColour (Colours::white);
+        g.setColour (clip.isClipped() ? Colours::white
+                     : levelDb > 0.f  ? Colour (0xffe5484d)
+                     : levelDb > -6.f ? Colour (0xfff2a900)
+                                      : Colours::white);
         float size = 11.f;
         Font font (FontOptions (size, Font::bold));
         while (size > 6.f && GlyphArrangement::getStringWidthInt (font, levelText) > box.getWidth() - 4)
@@ -183,10 +186,12 @@ struct VuLevelMeter : public Component,
         clip.update();
 
         const auto dB = Decibels::gainToDecibels (level, -60.f);
+        const bool colourChanged = (dB > 0.f) != (levelDb > 0.f) || (dB > -6.f) != (levelDb > -6.f);
+        levelDb = dB;
         const auto text = dB <= -60.f ? String ("-inf")
                                       : String (dB, getWidth() >= 24 ? 1 : 0);
 
-        if (wasClipped != clip.isClipped() || text != levelText)
+        if (wasClipped != clip.isClipped() || colourChanged || text != levelText)
         {
             levelText = text;
             repaint();
@@ -197,6 +202,7 @@ struct VuLevelMeter : public Component,
     AudioEngine::LevelMeterPtr levelMeter;
     ClipHold clip;
     String levelText { "-inf" };
+    float levelDb = -60.f;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (VuLevelMeter)
 };
