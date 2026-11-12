@@ -23,6 +23,7 @@
 #include "ui/emptyview.hpp"
 #include "ui/grapheditorview.hpp"
 #include "ui/graphmixerview.hpp"
+#include "ui/performanceview.hpp"
 #include "ui/keymapeditorview.hpp"
 #include "ui/luaconsoleview.hpp"
 #include "ui/mainmenu.hpp"
@@ -587,6 +588,10 @@ void StandardContent::setSecondaryView (const String& name)
     {
         setContentView (new LuaConsoleView(), true);
     }
+    else if (name == EL_VIEW_PERFORMANCE)
+    {
+        setContentView (new PerformanceView(), true);
+    }
 }
 
 void StandardContent::resizeContent (const Rectangle<int>& area)
@@ -923,6 +928,7 @@ void StandardContent::getAllCommands (Array<CommandID>& commands)
         Commands::showGraphEditor,
         Commands::showGraphMixer,
         Commands::showConsole,
+        Commands::showPerformance,
         Commands::toggleVirtualKeyboard,
         Commands::toggleMeterBridge,
         Commands::toggleChannelStrip,
@@ -1010,6 +1016,14 @@ void StandardContent::getCommandInfo (CommandID commandID, ApplicationCommandInf
                             : 0;
             result.addDefaultKeypress (KeyPress::F3Key, 0);
             result.setInfo ("Console", "Show the scripting console", "UI", flags);
+            break;
+        }
+        //======================================================================
+        case Commands::showPerformance: {
+            int flags = (showAccessoryView() && getAccessoryViewName() == EL_VIEW_PERFORMANCE)
+                            ? Info::isTicked
+                            : 0;
+            result.setInfo ("Performance", "Show engine load and per-node render time", "UI", flags);
             break;
         }
         //======================================================================
@@ -1104,6 +1118,13 @@ bool StandardContent::perform (const InvocationInfo& info)
             {
                 setSecondaryView (EL_VIEW_CONSOLE);
             }
+            break;
+        }
+        case Commands::showPerformance: {
+            if (showAccessoryView() && getAccessoryViewName() == EL_VIEW_PERFORMANCE)
+                container->setSecondaryView (nullptr);
+            else
+                setSecondaryView (EL_VIEW_PERFORMANCE);
             break;
         }
 

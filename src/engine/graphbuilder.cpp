@@ -232,9 +232,16 @@ public:
 
     void perform (AudioSampleBuffer& sharedBufferChans, const OwnedArray<MidiBuffer>& sharedMidiBuffers, const int numSamples)
     {
+        struct Timer
+        {
+            Processor& proc;
+            const int64 start = Time::getHighResolutionTicks();
+            ~Timer() { proc.addRenderTime ((float) (Time::highResolutionTicksToSeconds (Time::getHighResolutionTicks() - start) * 1000.0)); }
+        } timer { *node };
+
         for (int i = totalChans; --i >= 0;)
         {
-            channels[i] = sharedBufferChans.getWritePointer (audioChannelsToUse.getUnchecked (i), 0);
+            channels[i] =sharedBufferChans.getWritePointer (audioChannelsToUse.getUnchecked (i), 0);
         }
 
         AudioSampleBuffer buffer (channels, totalChans, numSamples);

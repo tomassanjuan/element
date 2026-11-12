@@ -271,6 +271,20 @@ public:
      */
     GraphNode* getParentGraph() const;
 
+    /** Records how long one render block took, in milliseconds. Audio thread. */
+    void addRenderTime (float ms) noexcept
+    {
+        renderMsAverage.store (renderMsAverage.load (std::memory_order_relaxed) * 0.95f + ms * 0.05f, std::memory_order_relaxed);
+        const auto peak = renderMsPeak.load (std::memory_order_relaxed);
+        renderMsPeak.store (ms > peak ? ms : peak * 0.999f, std::memory_order_relaxed);
+    }
+
+    /** Smoothed render time per block in milliseconds. */
+    float getRenderMsAverage() const noexcept { return renderMsAverage.load (std::memory_order_relaxed); }
+
+    /** Render time of the slowest recent block in milliseconds, slowly decaying. */
+    float getRenderMsPeak() const noexcept { return renderMsPeak.load (std::memory_order_relaxed); }
+
     void setInputRMS (int chan, float rms, int numSamples);
     float getInputRMS (int chan) const { return (chan < inRMS.size()) ? inRMS.getUnchecked (chan)->value.get() : 0.0f; }
     void setOutputRMS (int chan, float rms, int numSamples, float blockPeak);
@@ -574,6 +588,7 @@ private:
         AtomicValue<float> peak;  // linear peak with a fall time, written by the audio thread
     };
     juce::OwnedArray<RMSMeter> inRMS, outRMS;
+    std::atomic<float> renderMsAverage { 0.f }, renderMsPeak { 0.f };
 
     /** Integrates a block's RMS into the given meter with a fixed time window. */
     void updateRMSMeter (RMSMeter& meter, float blockRMS, int numSamples);

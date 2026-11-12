@@ -367,6 +367,7 @@ void MainMenu::buildViewMenu (Commands& cmd, PopupMenu& menu)
     menu.addSeparator();
     menu.addCommandItem (&cmd, Commands::showGraphMixer, "Graph Mixer");
     menu.addCommandItem (&cmd, Commands::showConsole, "Console");
+    menu.addCommandItem (&cmd, Commands::showPerformance, "Performance");
     menu.addSeparator();
     menu.addCommandItem (&cmd, Commands::rotateContentView, "Rotate View...");
     menu.addSeparator();
