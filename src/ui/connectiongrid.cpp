@@ -73,6 +73,30 @@ public:
         repaint();
     }
 
+    /** The matrix covers the source/destination lists that own the scrollbars,
+        so hand the wheel to them. Shift (or a sideways wheel) scrolls horizontally. */
+    void mouseWheelMove (const juce::MouseEvent& ev, const juce::MouseWheelDetails& wheel) override
+    {
+        auto* quads = findParentComponentOfClass<QuadrantLayout>();
+        if (quads == nullptr)
+            return;
+
+        auto details = wheel;
+        if (ev.mods.isShiftDown())
+        {
+            details.deltaX = wheel.deltaY;
+            details.deltaY = 0.0f;
+        }
+
+        if (details.deltaY != 0.0f)
+            if (auto* sources = quads->getQauadrantComponent (QuadrantLayout::Q2))
+                sources->mouseWheelMove (ev.getEventRelativeTo (sources), details);
+
+        if (details.deltaX != 0.0f)
+            if (auto* dests = quads->getQauadrantComponent (QuadrantLayout::Q4))
+                dests->mouseWheelMove (ev.getEventRelativeTo (dests), details);
+    }
+
     void mouseExit (const juce::MouseEvent& ev) override
     {
         PatchMatrixComponent::mouseExit (ev);
