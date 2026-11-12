@@ -114,7 +114,7 @@ public:
         viewport.setViewedComponent (&rows, false);
         viewport.setScrollBarsShown (true, false);
         addAndMakeVisible (viewport);
-        startTimerHz (2);
+        startTimerHz (4);
         timerCallback();
     }
 

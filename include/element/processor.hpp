@@ -274,7 +274,7 @@ public:
     /** Records how long one render block took, in milliseconds. Audio thread. */
     void addRenderTime (float ms) noexcept
     {
-        renderMsAverage.store (renderMsAverage.load (std::memory_order_relaxed) * 0.99f + ms * 0.01f, std::memory_order_relaxed);
+        renderMsAverage.store (renderMsAverage.load (std::memory_order_relaxed) * 0.97f + ms * 0.03f, std::memory_order_relaxed);
 
         const auto second = (juce::uint32) (juce::Time::getMillisecondCounter() / 1000);
         auto& bucket = renderMsBuckets[second % numRenderMsBuckets];
