@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include <element/audioengine.hpp>
 #include <element/devices.hpp>
 #include <element/engine.hpp>
 #include <element/node.hpp>
@@ -138,6 +139,7 @@ public:
 
         const auto session = services.context().session();
         auto* engine = services.find<EngineService>();
+        float heaviest = 0.f, heaviestPeak = 0.f;
         for (int g = 0; session != nullptr && g < session->getNumGraphs(); ++g)
         {
             const auto graph = session->getGraph (g);
@@ -158,11 +160,19 @@ public:
             std::sort (gr.rows.begin(), gr.rows.end(), [] (const Row& x, const Row& y) { return x.avg > y.avg; });
             snap.total += gr.total;
             snap.peak += gr.peak;
+            heaviest = jmax (heaviest, gr.total);
+            heaviestPeak = jmax (heaviestPeak, gr.peak);
             snap.graphs.push_back (std::move (gr));
         }
 
-        total = snap.total;
-        totalPeak = snap.peak;
+        // Graphs render in parallel: the best the threads can do is an even split,
+        // and one graph can't be split at all.
+        threads = 1;
+        if (auto audio = services.context().audio())
+            threads = jmax (1, audio->getNumRenderThreads());
+        total = jmax (heaviest, snap.total / threads);
+        totalPeak = jmax (heaviestPeak, snap.peak / threads);
+        sumMs = snap.total;
         budgetMs = snap.budgetMs;
         rows.setSnapshot (std::move (snap));
         resized();
@@ -188,7 +198,7 @@ public:
         g.drawText ("% of block", head.reduced (kMargin, 0), Justification::centredLeft);
 
         g.setFont (Font (FontOptions (14.f, Font::bold)));
-        drawRow (g, r.removeFromTop (kRowH), nameW, "Master (all graphs)", total, totalPeak, budgetMs);
+        drawRow (g, r.removeFromTop (kRowH), nameW, threads > 1 ? "Master (" + String (threads) + " threads, sum " + String (sumMs, 2) + " ms)" : String ("Master (all graphs)"), total, totalPeak, budgetMs);
         g.setColour (Colors::textColor.withAlpha (0.2f));
         g.fillRect (0, headerH - 1, getWidth(), 1);
     }
@@ -200,7 +210,8 @@ private:
     Rows rows;
     Viewport viewport;
     String header;
-    float total = 0.f, totalPeak = 0.f;
+    float total = 0.f, totalPeak = 0.f, sumMs = 0.f;
+    int threads = 1;
     double budgetMs = 0.0;
 };
 
