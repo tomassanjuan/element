@@ -9,6 +9,7 @@
 #include <element/ui/style.hpp>
 #include <element/ui/simplemeter.hpp>
 #include <element/ui/cliphold.hpp>
+#include <element/ui/decibelscale.hpp>
 
 using namespace juce;
 
@@ -233,6 +234,8 @@ public:
         bridge.addAndMakeVisible (audioInLabel);
         bridge.addAndMakeVisible (audioOutLabel);
         bridge.addAndMakeVisible (modeLabel);
+        bridge.addChildComponent (dbScale);
+        dbScale.setInterceptsMouseClicks (false, false);
         modeLabel.setInterceptsMouseClicks (false, false);
         modeLabel.setJustificationType (Justification::centred);
         modeLabel.setFont (Font (FontOptions (9.4f)));
@@ -257,6 +260,9 @@ public:
     }
 
     int sectionPadding() { return 6; }
+
+    /** Width reserved on the left for the dB scale (VU style only). */
+    int leftInset() const { return vuStyle ? scaleWidth : 0; }
 
     int meterSpaceRequired (bool input)
     {
@@ -289,7 +295,7 @@ public:
         drawSpace = meterSpace;
         const int count = meters.size() + metersOut.size();
         const int padding = (audioInsVisible && audioOutsVisible) ? sectionPadding() * 2 : 0;
-        const int available = bridge.getWidth() - padding;
+        const int available = bridge.getWidth() - padding - leftInset();
         const int wanted = (meterSize + meterSpace) * count;
         if (count == 0 || available <= 0 || wanted <= available)
             return;
@@ -327,7 +333,7 @@ public:
 
             int totalSpace = drawSpaceRequired (true);
 
-            r.setX (bridge.getWidth() / 2 - totalSpace / 2);
+            r.setX ((bridge.getWidth() + leftInset()) / 2 - totalSpace / 2);
             r2.setX (r.getX());
             r1.setX (r.getX());
             r1.setWidth (totalSpace);
@@ -355,7 +361,7 @@ public:
             auto r2 = r.removeFromBottom (showChannelLabels() ? labSize : 0);
             int totalSpace = drawSpaceRequired (false);
 
-            r.setX (bridge.getWidth() / 2 - totalSpace / 2);
+            r.setX ((bridge.getWidth() + leftInset()) / 2 - totalSpace / 2);
             r2.setX (r.getX());
             r1.setX (r.getX());
             r1.setWidth (totalSpace);
@@ -382,7 +388,7 @@ public:
 
             int totalSpace = drawTotalSpace();
 
-            r.setX (bridge.getWidth() / 2 - totalSpace / 2);
+            r.setX ((bridge.getWidth() + leftInset()) / 2 - totalSpace / 2);
             r2.setX (r.getX());
             r1.setX (r.getX());
             r1.setWidth (drawSpaceRequired (true));
@@ -422,6 +428,15 @@ public:
                     r2.removeFromLeft (drawSpace);
                 }
             }
+        }
+
+        // the scale spans the same area as the meters, below each readout box
+        auto* first = ! meters.isEmpty() ? meters.getFirst() : metersOut.getFirst();
+        dbScale.setVisible (leftInset() > 0 && first != nullptr);
+        if (first != nullptr && leftInset() > 0)
+        {
+            const int top = first->getY() + VuLevelMeter::readoutHeight + 2;
+            dbScale.setBounds (first->getX() - scaleWidth - 2, top, scaleWidth, first->getBottom() - top);
         }
     }
 
@@ -516,6 +531,8 @@ private:
     Label audioInLabel { "audioin", "IN" };
     Label audioOutLabel { "audioout", "OUT" };
     Label modeLabel;
+    static constexpr int scaleWidth = 26;
+    DecibelScale dbScale;
     bool audioInsVisible = false;
     bool audioOutsVisible = false;
     int meterSize = 18;
@@ -560,7 +577,8 @@ int MeterBridge::preferredWidth() const
 {
     const bool ins = hasVisibility (AudioIns);
     const bool outs = hasVisibility (AudioOuts);
-    return (ins ? impl->meterSpaceRequired (true) : 0)
+    return impl->leftInset()
+           + (ins ? impl->meterSpaceRequired (true) : 0)
            + (outs ? impl->meterSpaceRequired (false) : 0)
            + (ins && outs ? impl->sectionPadding() * 2 : 0);
 }

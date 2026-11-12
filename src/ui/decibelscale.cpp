@@ -26,7 +26,8 @@ void DecibelScale::paint (Graphics& g)
 
     lastY = 0;
 
-    for (const int dB : { 0, -3, -6, -12, -24, -36, -48, -60 })
+    // IEC 60268-18 scale marks
+    for (const int dB : { 0, -10, -20, -30, -40, -50, -60 })
         drawLabel (g, iecScale ((float) dB), String (dB));
 }
 
