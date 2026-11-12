@@ -119,9 +119,10 @@ void ChannelStripComponent::resized()
     const bool wideMeter = meter.getPortCount() > 2;
     auto r2 = r1.removeFromRight (wideMeter ? jmax (0, r1.getWidth() - stereoLeftWidth) : r1.getWidth() / 2);
 
-    r1.removeFromTop (4);
+    gainCaption = r1.removeFromTop (11);
     volume.setBounds (r1.removeFromTop (18).withSizeKeepingCentre (40, 18));
     levelLabel.setBounds (r1.removeFromTop (14).withSizeKeepingCentre (40, 14));
+    levelCaption = r1.removeFromTop (10);
     r1.removeFromBottom (4);
 
     for (auto* const button : extraButtons)
@@ -174,7 +175,13 @@ void ChannelStripComponent::valueChanged (Value& value)
     fader.setValue ((double) value.getValue(), sendNotificationAsync);
 }
 
-void ChannelStripComponent::paint (Graphics&) {}
+void ChannelStripComponent::paint (Graphics& g)
+{
+    g.setFont (FontOptions (9.f));
+    g.setColour (Colors::textColor.withAlpha (0.6f));
+    g.drawText ("Gain dB", gainCaption, Justification::centred, false);
+    g.drawText ("RMS dB", levelCaption, Justification::centred, false);
+}
 
 void ChannelStripComponent::stabilizeContent()
 {

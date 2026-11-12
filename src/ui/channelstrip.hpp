@@ -181,6 +181,7 @@ private:
     SimpleMeter meter;
     DecibelScale scale;
     Label levelLabel;
+    juce::Rectangle<int> gainCaption, levelCaption;
     ClipHold clip;
 
     struct ClipLight : public Component

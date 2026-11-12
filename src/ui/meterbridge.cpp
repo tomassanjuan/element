@@ -252,7 +252,7 @@ public:
         audioOutLabel.setText ("OUT", dontSendNotification);
         audioInLabel.setJustificationType (Justification::centred);
         audioOutLabel.setJustificationType (Justification::centred);
-        modeLabel.setText (sLevelMode == LevelMode::RMS ? "RMS" : "Peak", dontSendNotification);
+        modeLabel.setText (sLevelMode == LevelMode::RMS ? "RMS dB" : "Peak dB", dontSendNotification);
         modeLabel.setVisible (vuStyle);
     }
 
