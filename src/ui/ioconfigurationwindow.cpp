@@ -288,6 +288,10 @@ private:
                 auto itemId = 1;
                 auto selectedId = -1;
 
+                const auto& pending = isInput ? owner.currentLayout.inputBuses : owner.currentLayout.outputBuses;
+                const auto shown = currentBus < pending.size() ? pending.getReference (currentBus)
+                                                               : bus->getCurrentLayout();
+
                 for (auto i = 1; i <= AudioChannelSet::maxChannelsOfNamedLayout; ++i)
                 {
                     for (const auto& set : AudioChannelSet::channelSetsWithNumberOfChannels (i))
@@ -299,7 +303,7 @@ private:
                                                .setID (itemId));
                         }
 
-                        if (bus->getCurrentLayout() == set)
+                        if (shown == set)
                             selectedId = itemId;
 
                         ++itemId;
@@ -335,10 +339,24 @@ private:
 
         auto newLayout = owner.currentLayout;
         auto& buses = isInput ? newLayout.inputBuses : newLayout.outputBuses;
-        auto& otherBuses = ! isInput ? newLayout.inputBuses : newLayout.outputBuses;
-        buses.set (currentBus, set);
+
+        if (owner.allBusesToggle.getToggleState())
+        {
+            // buses that are currently disabled (e.g. an unused sidechain) stay disabled
+            for (auto* list : { &newLayout.inputBuses, &newLayout.outputBuses })
+                for (auto& b : *list)
+                    if (! b.isDisabled())
+                        b = set;
+        }
+        else
+        {
+            buses.set (currentBus, set);
+        }
 
         owner.currentLayout = newLayout;
+        updateBusLayout();
+        if (auto* config = owner.getConfig (! isInput))
+            config->updateBusLayout();
         owner.stabilize();
 #if 0
         if (auto* p = owner.getAudioProcessor())
@@ -499,8 +517,17 @@ IOConfigurationWindow::IOConfigurationWindow (Context& ctx, const Node& n, Audio
     applyButton.onClick = [this] { applyButtonClicked(); };
     addAndMakeVisible (applyButton);
 
+    allBusesToggle.setToggleState (true, dontSendNotification);
+    addAndMakeVisible (allBusesToggle);
+
+    warning.setText ("Plugin rejects this combination. Use one layout on all buses.", dontSendNotification);
+    warning.setColour (Label::textColourId, Colours::red);
+    warning.setVisible (false);
+    addAndMakeVisible (warning);
+
     currentLayout = p.getBusesLayout();
-    setSize (400, (inConfig != nullptr && outConfig != nullptr ? 160 : 0) + 240);
+    setSize (400, (inConfig != nullptr && outConfig != nullptr ? 160 : 0) + 270);
+    stabilize();
 }
 
 IOConfigurationWindow::~IOConfigurationWindow()
@@ -542,7 +569,10 @@ void IOConfigurationWindow::resized()
         outConfig->setBounds (r.removeFromTop (160));
 
     r.removeFromTop (10);
-    applyButton.setBounds (r.removeFromTop (24).removeFromRight (100));
+    auto row = r.removeFromTop (24);
+    applyButton.setBounds (row.removeFromRight (100));
+    allBusesToggle.setBounds (row);
+    warning.setBounds (r.removeFromTop (24));
 }
 
 void IOConfigurationWindow::update()
@@ -566,7 +596,9 @@ void IOConfigurationWindow::stabilize()
 {
     if (auto* p = getAudioProcessor())
     {
-        applyButton.setEnabled (p->checkBusesLayoutSupported (currentLayout));
+        const bool supported = p->checkBusesLayoutSupported (currentLayout);
+        applyButton.setEnabled (supported);
+        warning.setVisible (! supported);
     }
 }
 
