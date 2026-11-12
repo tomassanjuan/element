@@ -596,9 +596,27 @@ public:
         model->setNode (ui.getSelectedNode());
         model->refreshNodes();
         box.updateContent();
+        updateStripWidth();
         refreshOverview();
         resized();
         repaint();
+    }
+
+    /** Widens every strip to fit the node with the most channels. */
+    void updateStripWidth()
+    {
+        int widest = 2;
+        for (const auto& n : model->getNodes())
+            if (ProcessorPtr p = n.getObject())
+                widest = jmax (widest, jmin (NodeChannelStripComponent::maxMeterChannels,
+                                             jmax (p->getNumAudioInputs(), p->getNumAudioOutputs())));
+
+        const int width = ChannelStripComponent::widthForChannels (widest);
+        if (width != box.getRowHeight())
+        {
+            box.setRowHeight (width);
+            box.updateContent();
+        }
     }
 
     /** Feeds the overview the nodes the strips are showing. */
@@ -646,6 +664,7 @@ public:
     {
         model->refreshNodes();
         box.updateContent();
+        updateStripWidth();
         refreshOverview();
         resized();
         repaint();

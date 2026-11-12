@@ -143,14 +143,14 @@ public:
 
             if (numChannels <= 1)
             {
-                meter.setPortCount (2);
+                channelStrip.setMeterChannels (2);
                 for (int c = 0; c < 2; ++c)
                     feed (c, numChannels == 1 ? rms (0) : 0.f);
             }
             else
             {
                 const int shown = jmin (numChannels, maxMeterChannels);
-                meter.setPortCount (shown);
+                channelStrip.setMeterChannels (shown);
                 for (int c = 0; c < shown; ++c)
                     feed (c, rms (c));
             }
@@ -270,7 +270,10 @@ private:
     ComboBox channelBox, flowBox;
     TextButton channelsButton { "Ch" };
     ChannelStripComponent channelStrip;
+public:
     static constexpr int maxMeterChannels = 16;
+
+private:
     bool listenForNodeSelected;
 
     bool useFlowBox = true;

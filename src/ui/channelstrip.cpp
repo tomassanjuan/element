@@ -115,7 +115,9 @@ void ChannelStripComponent::addButton (Component* btn)
 void ChannelStripComponent::resized()
 {
     auto r1 = getLocalBounds().reduced (2);
-    auto r2 = r1.removeFromRight (r1.getWidth() / 2);
+    // with more than two channels the left column and fader keep their stereo width and the meter takes the rest
+    const bool wideMeter = meter.getPortCount() > 2;
+    auto r2 = r1.removeFromRight (wideMeter ? jmax (0, r1.getWidth() - stereoLeftWidth) : r1.getWidth() / 2);
 
     r1.removeFromTop (4);
     volume.setBounds (r1.removeFromTop (18).withSizeKeepingCentre (40, 18));
@@ -136,9 +138,9 @@ void ChannelStripComponent::resized()
         muteButton.setBounds (r1.removeFromBottom (18).withSizeKeepingCentre (26, 18));
     }
 
-    const int quarter = r2.getWidth() / 2;
+    const int quarter = wideMeter ? stereoFaderWidth : r2.getWidth() / 2;
     fader.setBounds (r2.removeFromRight (quarter));
-    auto r3 = r2.removeFromRight (quarter);
+    auto r3 = wideMeter ? r2 : r2.removeFromRight (quarter);
     r3.removeFromTop (4);
     r3.removeFromBottom (4);
     clipLight.setBounds (r3.removeFromTop (6));

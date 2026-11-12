@@ -63,6 +63,22 @@ public:
     ~ChannelStripComponent() noexcept;
 
     inline SimpleMeter& getSimpleMeter() { return meter; }
+
+    /** Strip width that gives every meter channel about 8 px: the stereo width,
+        or wider for more channels. */
+    static int widthForChannels (const int numChannels)
+    {
+        return numChannels <= 2 ? stereoWidth : juce::jmax ((int) stereoWidth, 65 + 8 * numChannels);
+    }
+
+    /** Sets how many channels the meter shows and re-lays out the strip. */
+    inline void setMeterChannels (const int numChannels)
+    {
+        if (numChannels == meter.getPortCount())
+            return;
+        meter.setPortCount (numChannels);
+        resized();
+    }
     inline void setVolume (const double dB, NotificationType notify = sendNotificationAsync)
     {
         fader.setValue (dB, notify);
@@ -153,6 +169,10 @@ public:
     Signal<void()> volumeLabelDoubleClicked;
 
 private:
+    static constexpr int stereoWidth = 80;
+    static constexpr int stereoLeftWidth = 38;
+    static constexpr int stereoFaderWidth = 19;
+
     FaderSlider fader;
     SimpleMeter meter;
     DecibelScale scale;
