@@ -128,9 +128,8 @@ void SimpleMeterValue::paint (Graphics& g)
     }
 
     const bool standard = SimpleMeter::getColorScheme() == SimpleMeter::ColorScheme::Standard;
-    const int extent = vertical ? h : w;
-    const int posYellow = roundToInt (extent * 0.6f);
-    const int posRed = roundToInt (extent * 0.8f);
+    const int posYellow = meter->getIECScale (-12.f);
+    const int posRed = meter->getIECScale (-3.f);
     const auto standardColour = [posYellow, posRed] (int position) {
         return position > posRed ? Colours::red : position > posYellow ? Colours::yellow
                                                                         : Colours::limegreen;
@@ -138,7 +137,7 @@ void SimpleMeterValue::paint (Graphics& g)
 
     if (standard)
     {
-        // solid bands: green up to 60 % of the meter, yellow up to 80 %, red above
+        // solid bands: green up to -12 dB, yellow up to -3 dB, red above
         const auto band = [&] (int from, int to, Colour colour) {
             to = jmin (to, level);
             if (to <= from)
