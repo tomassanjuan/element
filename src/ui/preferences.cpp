@@ -1046,7 +1046,7 @@ public:
             midi.setDefaultMidiOutput (dev);
     }
 
-    void changeListenerCallback (ChangeBroadcaster*) override
+    void changeListenerCallback (juce::ChangeBroadcaster*) override
     {
         updateDevices();
         for (int i = 0; i < DocumentWindow::getNumTopLevelWindows(); ++i)
