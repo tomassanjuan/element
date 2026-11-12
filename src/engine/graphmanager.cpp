@@ -181,6 +181,9 @@ private:
 
     void onPortsChanged()
     {
+        if (manager.isUnloaded())
+            return;
+
         const auto newPorts = object->createPortsData();
         int index = data.indexOf (data.getChildWithName (tags::ports));
         if (newPorts.isValid())
@@ -651,6 +654,7 @@ void GraphManager::setNodeModel (const Node& node)
 {
     EL_LOAD_TRACE (String ("setNodeModel: ") + node.getName());
     loaded = false;
+    unloaded = false;
 
     processor.clear();
     graph = node.data();
@@ -776,6 +780,7 @@ void GraphManager::unload()
     bindings.clear();
     processor.clear();
     loaded = false;
+    unloaded = true;
 }
 
 void GraphManager::clear()
@@ -799,6 +804,9 @@ void GraphManager::clear()
 
 void GraphManager::processorArcsChanged()
 {
+    if (unloaded)
+        return;
+
     ValueTree newArcs = ValueTree (tags::arcs);
     for (int i = 0; i < processor.getNumConnections(); ++i)
         newArcs.addChild (Node::makeArc (*processor.getConnection (i)), -1, nullptr);

@@ -97,17 +97,24 @@ public:
     /** Rebuilds the arcs model according to the GraphNode */
     inline void syncArcsModel()
     {
+        if (unloaded)
+            return;
         processor.removeIllegalConnections();
         processorArcsChanged();
     }
 
     inline bool isLoaded() const { return loaded; }
 
+    /** True between unload() and the next setNodeModel(). The processor is
+        empty then, so the arcs model must not be rebuilt from it. */
+    inline bool isUnloaded() const { return unloaded; }
+
 private:
     PluginManager& pluginManager;
     GraphNode& processor;
     ValueTree graph, arcs, nodes;
     bool loaded = false;
+    bool unloaded = false;
 
     uint32 lastUID;
 
