@@ -13,6 +13,97 @@
 
 namespace element {
 
+namespace {
+constexpr int kMargin = 10;
+constexpr int kRowH = 22;
+constexpr int kGraphH = 24;
+constexpr int kAvgW = 70;
+
+struct Row
+{
+    String name;
+    float avg, peak;
+};
+
+struct GraphRows
+{
+    String name;
+    std::vector<Row> rows;
+    float total = 0.f;
+};
+
+struct Snapshot
+{
+    std::vector<GraphRows> graphs;
+    float total = 0.f;
+    double budgetMs = 0.0;
+};
+
+int nameColumnWidth (int width) { return jmax (120, (width - 2 * kMargin) / 3); }
+
+/** Draws one row: name, average and peak ms, and a bar of the average against the block budget. */
+void drawRow (Graphics& g, Rectangle<int> line, int nameW, const String& name, float avg, float peak, double budgetMs)
+{
+    const float load = budgetMs > 0.0 ? (float) (avg / budgetMs) : 0.f;
+    g.setColour (Colors::textColor);
+    g.drawText (name, line.removeFromLeft (nameW), Justification::centredLeft, true);
+    g.drawText (String (avg, 3), line.removeFromLeft (kAvgW), Justification::centredRight);
+    g.drawText (String (peak, 3), line.removeFromLeft (kAvgW), Justification::centredRight);
+
+    auto bar = line.reduced (kMargin, 5);
+    g.setColour (Colors::textColor.withAlpha (0.12f));
+    g.fillRect (bar);
+    g.setColour (load > 0.8f ? Colours::red : load > 0.5f ? Colours::orange : Colours::limegreen);
+    g.fillRect (bar.withWidth (roundToInt (bar.getWidth() * jlimit (0.f, 1.f, load))));
+    g.setColour (Colors::textColor);
+    g.drawText (String (load * 100.f, 1) + "%", bar, Justification::centred);
+}
+
+/** The scrolling list of graphs and nodes. Sizes itself to its content. */
+class Rows : public Component
+{
+public:
+    void setSnapshot (Snapshot&& s)
+    {
+        snap = std::move (s);
+        int h = snap.graphs.empty() ? kRowH : 0;
+        for (const auto& gr : snap.graphs)
+            h += kGraphH + (int) gr.rows.size() * kRowH;
+        setSize (getWidth(), h);
+        repaint();
+    }
+
+    void paint (Graphics& g) override
+    {
+        g.fillAll (Colors::contentBackgroundColor);
+        g.setFont (Font (FontOptions (14.f)));
+
+        if (snap.graphs.empty())
+        {
+            g.setColour (Colors::textColor);
+            g.drawText ("No loaded graphs", getLocalBounds(), Justification::centred);
+            return;
+        }
+
+        auto r = getLocalBounds().reduced (kMargin, 0);
+        const int nameW = nameColumnWidth (getWidth());
+        for (const auto& gr : snap.graphs)
+        {
+            g.setColour (Colors::textColor);
+            g.setFont (Font (FontOptions (14.f, Font::bold)));
+            g.drawText (gr.name + "  -  " + String (gr.total, 3) + " ms", r.removeFromTop (kGraphH), Justification::bottomLeft, true);
+            g.setFont (Font (FontOptions (14.f)));
+
+            for (const auto& row : gr.rows)
+                drawRow (g, r.removeFromTop (kRowH), nameW, row.name, row.avg, row.peak, snap.budgetMs);
+        }
+    }
+
+private:
+    Snapshot snap;
+};
+} // namespace
+
 class PerformanceView::Content : public Component,
                                  private Timer
 {
@@ -20,48 +111,33 @@ public:
     explicit Content (Services& s) : services (s)
     {
         setOpaque (true);
+        viewport.setViewedComponent (&rows, false);
+        viewport.setScrollBarsShown (true, false);
+        addAndMakeVisible (viewport);
         startTimerHz (5);
+        timerCallback();
+    }
+
+    void resized() override
+    {
+        viewport.setBounds (getLocalBounds().withTrimmedTop (headerH));
+        rows.setSize (viewport.getMaximumVisibleWidth(), rows.getHeight());
     }
 
     void timerCallback() override
     {
-        repaint();
-    }
-
-    void paint (Graphics& g) override
-    {
-        g.fillAll (Colors::contentBackgroundColor);
-        g.setColour (Colors::textColor);
-        g.setFont (Font (FontOptions (14.f)));
-
         auto& devices = services.context().devices();
-        auto r = getLocalBounds().reduced (10, 6);
-
-        double budgetMs = 0.0;
-        String header = "No audio device";
+        Snapshot snap;
+        header = "No audio device";
         if (auto* dev = devices.getCurrentAudioDevice())
         {
-            budgetMs = dev->getCurrentBufferSizeSamples() * 1000.0 / jmax (1.0, dev->getCurrentSampleRate());
+            snap.budgetMs = dev->getCurrentBufferSizeSamples() * 1000.0 / jmax (1.0, dev->getCurrentSampleRate());
             header = "Engine CPU: " + String (devices.getCpuUsage() * 100.f, 1) + "%     Drops: "
-                     + String (devices.getXRunCount()) + "     Block budget: " + String (budgetMs, 2) + " ms";
+                     + String (devices.getXRunCount()) + "     Block budget: " + String (snap.budgetMs, 2) + " ms";
         }
-        g.drawText (header, r.removeFromTop (22), Justification::centredLeft);
-        r.removeFromTop (6);
 
         const auto session = services.context().session();
         auto* engine = services.find<EngineService>();
-
-        struct Row
-        {
-            String name;
-            float avg, peak;
-        };
-        struct GraphRows
-        {
-            String name;
-            std::vector<Row> rows;
-        };
-        std::vector<GraphRows> graphs;
         for (int g = 0; session != nullptr && g < session->getNumGraphs(); ++g)
         {
             const auto graph = session->getGraph (g);
@@ -73,71 +149,57 @@ public:
             {
                 const auto node = graph.getNode (i);
                 if (auto* proc = node.getObject())
+                {
                     gr.rows.push_back ({ node.getDisplayName(), proc->getRenderMsAverage(), proc->getRenderMsPeak() });
+                    gr.total += gr.rows.back().avg;
+                }
             }
             std::sort (gr.rows.begin(), gr.rows.end(), [] (const Row& x, const Row& y) { return x.avg > y.avg; });
-            graphs.push_back (std::move (gr));
+            snap.total += gr.total;
+            snap.graphs.push_back (std::move (gr));
         }
 
-        const int nameW = jmax (120, r.getWidth() / 3);
+        total = snap.total;
+        totalPeak = jmax (total, totalPeak * 0.98f);
+        budgetMs = snap.budgetMs;
+        rows.setSnapshot (std::move (snap));
+        resized();
+        repaint (0, 0, getWidth(), headerH);
+    }
+
+    void paint (Graphics& g) override
+    {
+        g.fillAll (Colors::contentBackgroundColor);
+        g.setFont (Font (FontOptions (14.f)));
+        g.setColour (Colors::textColor);
+
+        auto r = getLocalBounds().reduced (kMargin, 6);
+        g.drawText (header, r.removeFromTop (kRowH), Justification::centredLeft);
+        r.removeFromTop (6);
+
         auto head = r.removeFromTop (20);
+        const int nameW = nameColumnWidth (getWidth());
         g.setColour (Colors::textColor.withAlpha (0.6f));
         g.drawText ("Node", head.removeFromLeft (nameW), Justification::centredLeft);
-        g.drawText ("Avg ms", head.removeFromLeft (70), Justification::centredRight);
-        g.drawText ("Peak ms", head.removeFromLeft (70), Justification::centredRight);
-        g.drawText ("% of block", head.reduced (10, 0), Justification::centredLeft);
+        g.drawText ("Avg ms", head.removeFromLeft (kAvgW), Justification::centredRight);
+        g.drawText ("Peak ms", head.removeFromLeft (kAvgW), Justification::centredRight);
+        g.drawText ("% of block", head.reduced (kMargin, 0), Justification::centredLeft);
 
-        float total = 0.f;
-        for (const auto& gr : graphs)
-        {
-            if (r.getHeight() < 22)
-                break;
-            float graphTotal = 0.f;
-            for (const auto& row : gr.rows)
-                graphTotal += row.avg;
-            total += graphTotal;
-
-            g.setColour (Colors::textColor);
-            g.setFont (Font (FontOptions (14.f, Font::bold)));
-            g.drawText (gr.name + "  -  " + String (graphTotal, 3) + " ms", r.removeFromTop (24), Justification::bottomLeft, true);
-            g.setFont (Font (FontOptions (14.f)));
-
-            for (const auto& row : gr.rows)
-            {
-                if (r.getHeight() < 22)
-                    break;
-                auto line = r.removeFromTop (22);
-                const float load = budgetMs > 0.0 ? (float) (row.avg / budgetMs) : 0.f;
-                g.setColour (Colors::textColor);
-                g.drawText (row.name, line.removeFromLeft (nameW), Justification::centredLeft, true);
-                g.drawText (String (row.avg, 3), line.removeFromLeft (70), Justification::centredRight);
-                g.drawText (String (row.peak, 3), line.removeFromLeft (70), Justification::centredRight);
-
-                auto bar = line.reduced (10, 5);
-                g.setColour (Colors::textColor.withAlpha (0.12f));
-                g.fillRect (bar);
-                g.setColour (load > 0.8f ? Colours::red : load > 0.5f ? Colours::orange : Colours::limegreen);
-                g.fillRect (bar.withWidth (roundToInt (bar.getWidth() * jlimit (0.f, 1.f, load))));
-                g.setColour (Colors::textColor);
-                g.drawText (String (load * 100.f, 1) + "%", bar, Justification::centred);
-            }
-        }
-
-        if (graphs.empty())
-        {
-            g.setColour (Colors::textColor);
-            g.drawText ("No loaded graphs", r, Justification::centred);
-        }
-        else if (r.getHeight() >= 28)
-        {
-            r.removeFromTop (6);
-            g.setColour (Colors::textColor);
-            g.drawText ("All graphs: " + String (total, 3) + " ms", r.removeFromTop (22), Justification::centredLeft);
-        }
+        g.setFont (Font (FontOptions (14.f, Font::bold)));
+        drawRow (g, r.removeFromTop (kRowH), nameW, "Master (all graphs)", total, totalPeak, budgetMs);
+        g.setColour (Colors::textColor.withAlpha (0.2f));
+        g.fillRect (0, headerH - 1, getWidth(), 1);
     }
 
 private:
+    static constexpr int headerH = 6 + kRowH + 6 + 20 + kRowH + 6;
+
     Services& services;
+    Rows rows;
+    Viewport viewport;
+    String header;
+    float total = 0.f, totalPeak = 0.f;
+    double budgetMs = 0.0;
 };
 
 PerformanceView::PerformanceView()
