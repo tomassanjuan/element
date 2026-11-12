@@ -794,8 +794,6 @@ PortComponent* GraphEditorComponent::findPinAt (const int x, const int y) const
 
 void GraphEditorComponent::resized()
 {
-    updateBlockComponents (false);
-    updateConnectorComponents();
 }
 
 void GraphEditorComponent::changeListenerCallback (ChangeBroadcaster*)
