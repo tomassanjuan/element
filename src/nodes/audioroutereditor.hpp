@@ -30,7 +30,7 @@ public:
     void setRouterSize (int ins, int outs);
     float getGainDb (int row, int col) const;
     void setGainDb (int row, int col, float db);
-    void applyDownmix51();
+    void applyDownmix51 (bool withSub = false);
 
 private:
     MatrixState matrix;

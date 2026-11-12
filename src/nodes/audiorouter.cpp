@@ -168,11 +168,14 @@ void AudioRouterNode::setGainDb (int src, int dst, float db)
     sendChangeMessage();
 }
 
-void AudioRouterNode::setDownmix51ToStereo()
+void AudioRouterNode::setDownmix51ToStereo (bool withSub)
 {
-    setSize (6, 2, false);
+    const int outs = withSub ? 3 : 2;
+    setSize (6, outs, false);
 
-    MatrixState m (6, 2);
+    MatrixState m (6, outs);
+    if (withSub)
+        m.set (3, 2, true); // LFE -> Sub
     m.set (0, 0, true); // L  -> L
     m.set (2, 0, true); // C  -> L
     m.set (4, 0, true); // Ls -> L
