@@ -42,27 +42,20 @@ void DecibelScale::resized()
 
 void DecibelScale::drawLabel (Graphics& g, const int y, const String& label)
 {
-    int iCurrY = getHeight() - y;
-    int iWidth = getWidth();
-
-    int iMidHeight = (int) (font.getHeight() * 0.5f);
-
-    GlyphArrangement glyphs;
-    glyphs.addLineOfText (font, label, 0, 0);
-    if (glyphs.getBoundingBox (0, -1, true).getWidth() < iWidth - 5)
-    {
-        g.drawLine (0, iCurrY, 2, iCurrY);
-        g.drawLine (iWidth - 3, iCurrY, iWidth - 1, iCurrY);
-    }
+    const int iCurrY = getHeight() - y;
+    const int iWidth = getWidth();
+    const int iMidHeight = (int) (font.getHeight() * 0.5f);
 
     if (iCurrY < iMidHeight || iCurrY > lastY + iMidHeight)
     {
+        // one tick column against the meter, labels right-aligned to it so the digits line up
+        g.drawLine ((float) iWidth - 4.f, (float) iCurrY, (float) iWidth, (float) iCurrY);
         g.drawText (label,
-                    2,
+                    0,
                     iCurrY - iMidHeight,
-                    iWidth - 3,
+                    iWidth - 6,
                     (int) font.getHeight(),
-                    Justification::centred,
+                    Justification::centredRight,
                     false);
 
         lastY = iCurrY + 1;
