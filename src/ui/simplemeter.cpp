@@ -127,16 +127,17 @@ void SimpleMeterValue::paint (Graphics& g)
     }
 
     const bool standard = SimpleMeter::getColorScheme() == SimpleMeter::ColorScheme::Standard;
-    const int pos6dB = meter->getIECLevel (SimpleMeter::Color6dB);
-    const int pos0dB = meter->getIECLevel (SimpleMeter::Color0dB);
-    const auto standardColour = [pos6dB, pos0dB] (int position) {
-        return position > pos0dB ? Colours::red : position > pos6dB ? Colours::yellow
-                                                                    : Colours::limegreen;
+    const int extent = vertical ? h : w;
+    const int posYellow = roundToInt (extent * 0.6f);
+    const int posRed = roundToInt (extent * 0.8f);
+    const auto standardColour = [posYellow, posRed] (int position) {
+        return position > posRed ? Colours::red : position > posYellow ? Colours::yellow
+                                                                        : Colours::limegreen;
     };
 
     if (standard)
     {
-        // solid bands: green up to -6 dB, yellow up to 0 dB, red above
+        // solid bands: green up to 60 % of the meter, yellow up to 80 %, red above
         const auto band = [&] (int from, int to, Colour colour) {
             to = jmin (to, level);
             if (to <= from)
@@ -145,9 +146,9 @@ void SimpleMeterValue::paint (Graphics& g)
             vertical ? g.fillRect (0, h - to, w, to - from)
                      : g.fillRect (from, 0, to - from, h);
         };
-        band (0, pos6dB, Colours::limegreen);
-        band (pos6dB, pos0dB, Colours::yellow);
-        band (pos0dB, level, Colours::red);
+        band (0, posYellow, Colours::limegreen);
+        band (posYellow, posRed, Colours::yellow);
+        band (posRed, level, Colours::red);
     }
 
     int ptOver = 0;
