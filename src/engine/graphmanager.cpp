@@ -773,6 +773,14 @@ void GraphManager::savePluginStates()
 void GraphManager::unload()
 {
     savePluginStates();
+    // IO nodes take their name from the processor, keep it for display while unloaded.
+    for (int i = 0; i < nodes.getNumChildren(); ++i)
+    {
+        Node n (nodes.getChild (i), false);
+        if (n.getName().isEmpty())
+            n.setName (n.getPluginName());
+    }
+
     // Drop the model's processor references first: editors listening to the
     // model release their parameter observers while the processors are alive.
     for (int i = 0; i < nodes.getNumChildren(); ++i)

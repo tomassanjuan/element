@@ -73,6 +73,9 @@ PluginWindow* WindowManager::createPluginWindowFor (const Node& n, Component* e)
 
 PluginWindow* WindowManager::createPluginWindowFor (const Node& node)
 {
+    if (node.getObject() == nullptr)
+        return nullptr; // e.g. the node's graph is unloaded
+
     NodeEditorFactory factory (gui);
 
     /** Try internal formats and custom GUIs. */
