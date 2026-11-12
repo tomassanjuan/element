@@ -141,7 +141,6 @@ public:
             };
 
             layout.layOutComponents (comps, 3, 0, 0, r.getWidth(), r.getHeight(), true, true);
-            lastSecondaryHeight = secondary->getHeight();
         }
         else
         {
@@ -225,9 +224,9 @@ public:
         if (showAccessoryView)
         {
             lastSecondaryHeight = jmax (50, lastSecondaryHeight);
-            layout.setItemLayout (0, 48, -1.0, primary->getHeight() - 4 - lastSecondaryHeight);
+            layout.setItemLayout (0, 48, -1.0, -1.0);
             layout.setItemLayout (1, barSize, barSize, barSize);
-            layout.setItemLayout (2, 48, -1.0, lastSecondaryHeight);
+            layout.setItemLayout (2, lastSecondaryHeight, lastSecondaryHeight, lastSecondaryHeight);
         }
 
         resized();
@@ -353,6 +352,7 @@ private:
         if (showAccessoryView)
         {
             capturedAccessoryHeight = secondary->getHeight();
+            lastSecondaryHeight = capturedAccessoryHeight;
         }
     }
 
@@ -999,6 +999,7 @@ void StandardContent::getCommandInfo (CommandID commandID, ApplicationCommandInf
             int flags = (showAccessoryView() && getAccessoryViewName() == EL_VIEW_GRAPH_MIXER)
                             ? Info::isTicked
                             : 0;
+            result.addDefaultKeypress (KeyPress::F4Key, 0);
             result.setInfo ("Graph Mixer", "Show/hide the graph mixer", "UI", flags);
             break;
         }
