@@ -116,6 +116,11 @@ struct GuiService::KeyPressManager : public KeyListener,
         if (! handled)
             handled = handleUiScale (key);
 
+#if JUCE_MAC
+        if (! handled)
+            handled = handleHideWindow (key, component);
+#endif
+
         return handled;
     }
 
@@ -130,6 +135,24 @@ struct GuiService::KeyPressManager : public KeyListener,
     }
 
     static constexpr double uiScaleStep = 0.05;
+
+#if JUCE_MAC
+    /** Cmd+W on the main window hides it to the menu bar icon, or hides the app when there is no icon. */
+    bool handleHideWindow (const KeyPress& key, Component* component)
+    {
+        if (key != KeyPress ('w', ModifierKeys::commandModifier, 0)
+            || owner.mainWindow == nullptr
+            || component == nullptr
+            || component->getTopLevelComponent() != owner.mainWindow.get())
+            return false;
+
+        if (owner.context().settings().isSystrayEnabled())
+            owner.commands().invokeDirectly (Commands::toggleUserInterface, true);
+        else
+            Process::hide();
+        return true;
+    }
+#endif
 
     bool handleUiScale (const KeyPress& key)
     {
