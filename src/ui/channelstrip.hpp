@@ -95,9 +95,17 @@ public:
     */
     inline void setLevelDb (float dB)
     {
-        levelLabel.setText (levelmeter::textFor (dB), juce::dontSendNotification);
-        levelLabel.setColour (juce::Label::textColourId,
-                              levelmeter::colourFor (dB, juce::Colours::white.withAlpha (0.8f)));
+        const int tenths = dB <= levelmeter::floorDb ? std::numeric_limits<int>::min()
+                                                     : juce::roundToInt (dB * 10.f);
+        const int bucket = dB > 0.f ? 2 : dB > -6.f ? 1 : 0;
+        if (tenths != shownTenths || bucket != shownBucket)
+        {
+            shownTenths = tenths;
+            shownBucket = bucket;
+            levelLabel.setText (levelmeter::textFor (dB), juce::dontSendNotification);
+            levelLabel.setColour (juce::Label::textColourId,
+                                  levelmeter::colourFor (dB, juce::Colours::white.withAlpha (0.8f)));
+        }
         clip.update (dB > 0.f);
         clipLight.setLit (clip.isClipped());
     }
@@ -177,6 +185,8 @@ private:
     SimpleMeter meter;
     DecibelScale scale;
     Label levelLabel;
+    int shownTenths = std::numeric_limits<int>::max();
+    int shownBucket = -1;
     juce::Rectangle<int> gainCaption, levelCaption;
     ClipHold clip;
 

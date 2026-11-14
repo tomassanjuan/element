@@ -588,6 +588,9 @@ private:
     juce::Atomic<int> muteInput { 0 };
 
     double sampleRate = 0.0;
+    int peakDecayBlock = 0;
+    double peakDecayRate = 0.0;
+    float peakDecay = 0.f;
     int blockSize = 0;
     int latencySamples = 0;
     juce::String name;

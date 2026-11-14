@@ -344,7 +344,7 @@ public:
 
         if (ids == shownIds)
         {
-            repaint();
+            refreshGroups();
             return;
         }
 
@@ -354,7 +354,10 @@ public:
         {
             auto group = std::make_unique<Group> (gui, n);
             if (group->numColumns() > 0)
+            {
+                group->onSelected = [this] { refreshGroups(); };
                 inner.addAndMakeVisible (groups.add (group.release()));
+            }
         }
 
         layoutGroups();
@@ -392,7 +395,11 @@ private:
     class Column : public Component
     {
     public:
-        explicit Column (int channelNumber) : number (channelNumber) { addAndMakeVisible (meter); }
+        explicit Column (int channelNumber) : numberText (channelNumber)
+        {
+            addAndMakeVisible (meter);
+            dbText = levelmeter::textFor (db);
+        }
 
         void setLevel (float rms)
         {
@@ -403,6 +410,7 @@ private:
             if (std::abs (newDb - db) >= 0.1f)
             {
                 db = newDb;
+                dbText = levelmeter::textFor (db);
                 repaint (getLocalBounds().removeFromBottom (readoutHeight));
             }
         }
@@ -412,17 +420,20 @@ private:
         void paint (Graphics& g) override
         {
             auto r = getLocalBounds().removeFromBottom (readoutHeight);
-            g.setFont (Font (FontOptions (11.f)));
+            g.setFont (numberFont);
             g.setColour (Colors::textColor);
-            g.drawText (String (number), r.removeFromTop (readoutHeight / 2), Justification::centred, false);
-            g.setFont (Font (FontOptions (11.f, Font::bold)));
+            g.drawText (numberText, r.removeFromTop (readoutHeight / 2), Justification::centred, false);
+            g.setFont (levelFont);
             g.setColour (levelmeter::colourFor (db, Colors::textColor));
-            g.drawText (levelmeter::textFor (db), r, Justification::centred, false);
+            g.drawText (dbText, r, Justification::centred, false);
         }
 
     private:
         SimpleMeter meter { 1, false };
-        int number;
+        String numberText;
+        String dbText;
+        Font numberFont { FontOptions (11.f) };
+        Font levelFont { FontOptions (11.f, Font::bold) };
         float db = -100.f;
     };
 
@@ -438,6 +449,22 @@ private:
                 for (int c = 0; c < count; ++c)
                     addAndMakeVisible (columns.add (new Column (c + 1)));
             }
+            refresh();
+        }
+
+        /** Re-reads the name, colour and selection, repainting only if one changed. */
+        void refresh()
+        {
+            const auto newName = node.getDisplayName();
+            const auto newColor = node.getColor (Colours::transparentBlack);
+            const bool nowSelected = node == gui.getSelectedNode();
+            if (newName == displayName && newColor == color && nowSelected == selected)
+                return;
+
+            displayName = newName;
+            color = newColor;
+            selected = nowSelected;
+            repaint();
         }
 
         int numColumns() const { return columns.size(); }
@@ -456,7 +483,6 @@ private:
             g.fillAll();
 
             auto header = getLocalBounds().removeFromTop (headerHeight);
-            const auto color = node.getColor (Colours::transparentBlack);
             if (color != Colours::transparentBlack)
             {
                 g.setColour (color);
@@ -464,13 +490,13 @@ private:
             }
 
             g.setColour (color != Colours::transparentBlack ? Colours::white.overlaidWith (color).contrasting() : Colors::textColor);
-            g.setFont (Font (FontOptions (Style::fontSizeDefault)));
-            g.drawText (node.getDisplayName(), header.reduced (3, 0), Justification::centred, true);
+            g.setFont (nameFont);
+            g.drawText (displayName, header.reduced (3, 0), Justification::centred, true);
 
             g.setColour (Colors::backgroundColor);
             g.fillRect (getWidth() - 1, 0, 1, getHeight());
 
-            if (node == gui.getSelectedNode())
+            if (selected)
             {
                 g.setColour (Colors::toggleBlue);
                 g.drawRect (getLocalBounds(), 2);
@@ -488,16 +514,28 @@ private:
         void mouseDown (const MouseEvent&) override
         {
             gui.selectNode (node);
-            if (auto* parent = getParentComponent())
-                parent->repaint();
+            if (onSelected)
+                onSelected();
         }
+
+        std::function<void()> onSelected;
 
     private:
         GuiService& gui;
         Node node;
+        String displayName;
+        Colour color;
+        bool selected = false;
+        Font nameFont { FontOptions (Style::fontSizeDefault) };
         bool monitorInputs = false;
         OwnedArray<Column> columns;
     };
+
+    void refreshGroups()
+    {
+        for (auto* group : groups)
+            group->refresh();
+    }
 
     void layoutGroups()
     {
