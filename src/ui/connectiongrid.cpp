@@ -180,12 +180,7 @@ public:
 
     void setGainDb (const int row, const int col, const float db)
     {
-        ViewHelpers::postMessageFor (this, new ChangeConnectionGainMessage (Node (graphModel, false),
-                                                                            getNode (row, true).getNodeId(),
-                                                                            getPort (row, true).index(),
-                                                                            getNode (col, false).getNodeId(),
-                                                                            getPort (col, false).index(),
-                                                                            jlimit (-100.0f, 24.0f, db)));
+        ViewHelpers::postMessageFor (this, new ChangeConnectionGainMessage (Node (graphModel, false), getNode (row, true).getNodeId(), getPort (row, true).index(), getNode (col, false).getNodeId(), getPort (col, false).index(), jlimit (-100.0f, 24.0f, db)));
     }
 
     void showGainMenu (const int row, const int col)

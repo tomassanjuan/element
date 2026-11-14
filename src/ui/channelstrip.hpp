@@ -97,7 +97,8 @@ public:
     {
         const int tenths = dB <= levelmeter::floorDb ? std::numeric_limits<int>::min()
                                                      : juce::roundToInt (dB * 10.f);
-        const int bucket = dB > 0.f ? 2 : dB > -6.f ? 1 : 0;
+        const int bucket = dB > 0.f ? 2 : dB > -6.f ? 1
+                                                    : 0;
         if (tenths != shownTenths || bucket != shownBucket)
         {
             shownTenths = tenths;

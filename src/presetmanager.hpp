@@ -8,7 +8,6 @@
 
 #include <element/datapath.hpp>
 
-
 namespace element {
 
 class PresetManager

@@ -54,7 +54,8 @@ void drawRow (Graphics& g, Rectangle<int> line, int nameW, const String& name, f
     auto bar = line.reduced (kMargin, 5);
     g.setColour (Colors::textColor.withAlpha (0.12f));
     g.fillRect (bar);
-    g.setColour (load > 0.8f ? Colours::red : load > 0.5f ? Colours::orange : Colours::limegreen);
+    g.setColour (load > 0.8f ? Colours::red : load > 0.5f ? Colours::orange
+                                                          : Colours::limegreen);
     g.fillRect (bar.withWidth (roundToInt (bar.getWidth() * jlimit (0.f, 1.f, load))));
     g.setColour (Colors::textColor);
     g.drawText (String (load * 100.f, 1) + "%", bar, Justification::centred);
@@ -227,7 +228,7 @@ PerformanceView::~PerformanceView()
 
 void PerformanceView::resized()
 {
-    if (content)
+    if (content != nullptr)
         content->setBounds (getLocalBounds());
 }
 

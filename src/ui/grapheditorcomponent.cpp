@@ -138,13 +138,17 @@ public:
         if (db < -80.0f)
             return Colours::grey;
 
-        struct Stop { float db; Colour colour; };
+        struct Stop
+        {
+            float db;
+            Colour colour;
+        };
         static const Stop stops[] = {
             { -80.0f, Colour (0xff2196f3) }, // blue
             { -40.0f, Colour (0xff4caf50) }, // green
             { -18.0f, Colour (0xff4caf50) }, // green
-            { -8.0f, Colour (0xffffeb3b) },  // yellow
-            { 0.0f, Colour (0xfff44336) },   // red
+            { -8.0f, Colour (0xffffeb3b) }, // yellow
+            { 0.0f, Colour (0xfff44336) }, // red
         };
 
         for (size_t i = 1; i < std::size (stops); ++i)

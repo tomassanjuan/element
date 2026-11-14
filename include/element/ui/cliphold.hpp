@@ -41,8 +41,7 @@ public:
     */
     bool update() noexcept
     {
-        if (clipped && juce::Time::getMillisecondCounter() - lastHit > holdMs)
-        {
+        if (clipped && juce::Time::getMillisecondCounter() - lastHit > holdMs) {
             clipped = false;
             return true;
         }

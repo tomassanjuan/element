@@ -457,7 +457,7 @@ void GuiService::deactivate()
 
     if (mainWindow)
     {
-        if (keys)
+        if (keys != nullptr)
             mainWindow->removeKeyListener (keys.get());
 
         closeAllWindows();
@@ -466,7 +466,7 @@ void GuiService::deactivate()
         mainWindow = nullptr;
     }
 
-    if (keys)
+    if (keys != nullptr)
         Desktop::getInstance().removeGlobalMouseListener (keys.get());
     keys = nullptr;
 

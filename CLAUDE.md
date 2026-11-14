@@ -139,6 +139,9 @@ Later commits on this branch, all user-tested and working unless noted:
 - `util/install-local.ps1`: quits Element via WM_QUERYENDSESSION, installs and restarts it. Works from the tray.
 - Esc closes the foreground plugin window, also when the plugin editor has native focus (WH_KEYBOARD hook in `WindowManager`, Windows only).
 - New plugin windows opened by double-click on a block take focus. Root cause: `ViewHelpers::presentPluginWindow` still called with the old `focus = false` default because `viewhelpers.obj` was not rebuilt after the default changed in `ui.hpp`. It now passes `true` explicitly. If a default argument in a header seems ignored, check that object's timestamp in `build/src/element.dir/Release/`.
+- Cleanup pass, user-tested working: shared level helpers (`levelmeter::` in `decibelscale.hpp`), `ClipHold::update (bool)`, `ChoiceSettingRow` in Preferences, `Settings::applyMeterSettings()` (the meters still use static setters), one timer for all graph cables, meter and mixer paint caching with timers stopped while hidden, cached peak decay in `Processor::setOutputRMS`, `EL_LOAD_TRACE` removed, `showPluginWindowsFor` forwards `focus`, `presentPluginWindow` has no default `focus`.
+- `SimpleMeter::values` is a `juce::OwnedArray` now (was a raw `new[]`).
+- Formatting without a system clang-format: `pip install clang-format`, then `git-clang-format --binary <Scripts>/clang-format.exe 1.2.0 -- src include` formats only the lines this branch changed.
 - macOS, not compiled or tested here: Cmd+W hides the main window to the menu bar icon (or the app), in `KeyPressManager`.
 
 ## Open jobs

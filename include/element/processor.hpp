@@ -278,13 +278,10 @@ public:
 
         const auto second = (juce::uint32) (juce::Time::getMillisecondCounter() / 1000);
         auto& bucket = renderMsBuckets[second % numRenderMsBuckets];
-        if (bucket.second.load (std::memory_order_relaxed) != second)
-        {
+        if (bucket.second.load (std::memory_order_relaxed) != second) {
             bucket.first.store (ms, std::memory_order_relaxed);
             bucket.second.store (second, std::memory_order_relaxed);
-        }
-        else if (ms > bucket.first.load (std::memory_order_relaxed))
-        {
+        } else if (ms > bucket.first.load (std::memory_order_relaxed)) {
             bucket.first.store (ms, std::memory_order_relaxed);
         }
     }

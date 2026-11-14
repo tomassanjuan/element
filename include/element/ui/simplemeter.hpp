@@ -129,7 +129,7 @@ private:
     friend class SimpleMeterValue;
 
     int portCount;
-    SimpleMeterValue** values;
+    juce::OwnedArray<SimpleMeterValue> values;
     float scale;
     int levels[LevelCount];
     juce::Colour colors[ColorCount];

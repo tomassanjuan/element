@@ -257,6 +257,7 @@ private:
     PortArray audioIns, audioOuts;
     ComboBox channelBox, flowBox;
     ChannelStripComponent channelStrip;
+
 public:
     static constexpr int maxMeterChannels = 16;
 

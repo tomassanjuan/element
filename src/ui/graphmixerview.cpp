@@ -668,8 +668,7 @@ public:
         int widest = 2;
         for (const auto& n : model->getNodes())
             if (ProcessorPtr p = n.getObject())
-                widest = jmax (widest, jmin (NodeChannelStripComponent::maxMeterChannels,
-                                             jmax (p->getNumAudioInputs(), p->getNumAudioOutputs())));
+                widest = jmax (widest, jmin (NodeChannelStripComponent::maxMeterChannels, jmax (p->getNumAudioInputs(), p->getNumAudioOutputs())));
 
         const int width = ChannelStripComponent::widthForChannels (widest);
         if (width != box.getRowHeight())
@@ -757,13 +756,13 @@ GraphMixerView::~GraphMixerView()
 
 void GraphMixerView::resized()
 {
-    if (content)
+    if (content != nullptr)
         content->setBounds (getLocalBounds());
 }
 
 void GraphMixerView::stabilizeContent()
 {
-    if (content)
+    if (content != nullptr)
         content->stabilize();
 }
 

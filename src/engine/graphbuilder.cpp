@@ -265,7 +265,7 @@ public:
 
         for (int i = totalChans; --i >= 0;)
         {
-            channels[i] =sharedBufferChans.getWritePointer (audioChannelsToUse.getUnchecked (i), 0);
+            channels[i] = sharedBufferChans.getWritePointer (audioChannelsToUse.getUnchecked (i), 0);
         }
 
         AudioSampleBuffer buffer (channels, totalChans, numSamples);

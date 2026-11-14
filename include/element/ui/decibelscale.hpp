@@ -65,7 +65,8 @@ static const juce::Colour warnColour (0xfff2a900);
 /** Warning colour for a level: red above 0 dB, amber above -6 dB, otherwise @p normal. */
 inline juce::Colour colourFor (float dB, juce::Colour normal)
 {
-    return dB > 0.f ? overColour : dB > -6.f ? warnColour : normal;
+    return dB > 0.f ? overColour : dB > -6.f ? warnColour
+                                             : normal;
 }
 
 /** Readout text for a level in dB. */

@@ -182,7 +182,7 @@ struct VuLevelMeter : public Component,
         g.fillRect (box);
 
         g.setColour (clip.isClipped() ? Colours::white
-                     : levelmeter::colourFor (levelDb, Colours::white));
+                                      : levelmeter::colourFor (levelDb, Colours::white));
         g.setFont (readoutFont);
         g.drawText (levelText, box, Justification::centred, false);
     }
@@ -293,11 +293,6 @@ public:
     int meterSpaceRequired (bool input)
     {
         return ((meterSize + meterSpace) * (input ? meters.size() : metersOut.size()));
-    }
-
-    int totalSpaceRequired()
-    {
-        return meterSpaceRequired (true) + (sectionPadding() * 2) + meterSpaceRequired (false);
     }
 
     void changeListenerCallback (juce::ChangeBroadcaster* source) override

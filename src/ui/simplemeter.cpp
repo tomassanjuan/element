@@ -129,7 +129,7 @@ void SimpleMeterValue::paint (Graphics& g)
     const int posRed = standard ? meter->getIECScale (-3.f) : 0;
     const auto standardColour = [posYellow, posRed] (int position) {
         return position > posRed ? Colours::red : position > posYellow ? Colours::yellow
-                                                                        : Colours::limegreen;
+                                                                       : Colours::limegreen;
     };
 
     if (standard)
@@ -211,7 +211,8 @@ void SimpleMeterValue::paint (Graphics& g)
         }
     }
 
-    g.setColour (clip.isClipped() ? Colours::red : standard ? standardColour (peak) : meter->color (peakColor));
+    g.setColour (clip.isClipped() ? Colours::red : standard ? standardColour (peak)
+                                                            : meter->color (peakColor));
     (vertical) ? g.drawLine (0, h - peak, w, h - peak)
                : g.drawLine (peak, 0, peak, h);
 }
@@ -223,7 +224,6 @@ void SimpleMeterValue::resized()
 
 SimpleMeter::SimpleMeter (const int numPorts, bool _horizontal)
     : portCount (jmax (1, numPorts)),
-      values (nullptr),
       scale (0.0f),
       peakFalloff (DIGITAL_METER_PEAK_FALLOFF),
       horizontal (_horizontal)
@@ -248,30 +248,13 @@ SimpleMeter::SimpleMeter (const int numPorts, bool _horizontal)
     colors[ColorFore] = findColour (foregroundColourId);
 }
 
-SimpleMeter::~SimpleMeter()
-{
-    if (values != nullptr)
-    {
-        for (int port = 0; port < portCount; port++)
-            delete values[port];
-        delete[] values;
-    }
-}
+SimpleMeter::~SimpleMeter() {}
 
 void SimpleMeter::resized()
 {
-    if (values == nullptr)
-    {
-        if (portCount > 0)
-        {
-            values = new SimpleMeterValue*[portCount];
-            for (int port = 0; port < portCount; port++)
-            {
-                values[port] = createSimpleMeterValue();
-                addAndMakeVisible (values[port]);
-            }
-        }
-    }
+    if (values.isEmpty())
+        for (int port = 0; port < portCount; ++port)
+            addAndMakeVisible (values.add (createSimpleMeterValue()));
 
     const int length = horizontal ? getWidth() : getHeight();
     scale = DecibelScale::lengthScale * (float) length;
@@ -365,14 +348,7 @@ void SimpleMeter::setPortCount (int numPorts)
     if (numPorts == portCount)
         return;
 
-    if (values != nullptr)
-    {
-        for (int port = 0; port < portCount; port++)
-            delete values[port];
-        delete[] values;
-        values = nullptr;
-    }
-
+    values.clear();
     portCount = numPorts;
     resized(); // recreates the channel meters when the component has a size
     repaint();
@@ -382,25 +358,20 @@ int SimpleMeter::getPeakFalloff() const { return peakFalloff; }
 
 void SimpleMeter::resetPeaks()
 {
-    if (nullptr != values)
-        for (int iPort = 0; iPort < portCount; iPort++)
-            values[iPort]->resetPeak();
+    for (auto* const v : values)
+        v->resetPeak();
 }
 
 void SimpleMeter::refresh()
 {
-    if (nullptr != values)
-        for (int port = 0; port < portCount; ++port)
-            values[port]->refresh();
+    for (auto* const v : values)
+        v->refresh();
 }
 
 void SimpleMeter::setValue (const int port, const float value)
 {
-    if (values != nullptr && juce::isPositiveAndBelow (port, portCount))
-    {
-        if (value != values[port]->getValue())
-            values[port]->setValue (value);
-    }
+    if (auto* const v = values[port]; v != nullptr && value != v->getValue())
+        v->setValue (value);
 }
 
 const Colour& SimpleMeter::color (const int index) const

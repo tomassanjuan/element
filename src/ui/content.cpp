@@ -430,7 +430,7 @@ public:
             streamingStatusLabel.setText (text, dontSendNotification);
             // red above 90 % CPU, amber above 70 % or after any drop
             streamingStatusLabel.setColour (Label::textColourId,
-                                            cpu > 90.f ? levelmeter::overColour
+                                            cpu > 90.f                  ? levelmeter::overColour
                                             : (cpu > 70.f || drops > 0) ? levelmeter::warnColour
                                                                         : Colour (Colors::textColor));
 
