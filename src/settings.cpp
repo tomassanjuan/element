@@ -33,7 +33,7 @@ const char* Settings::oscHostPortKey = "oscHostPortKey";
 const char* Settings::oscHostEnabledKey = "oscHostEnabledKey";
 const char* Settings::systrayKey = "systrayKey";
 const char* Settings::startHiddenKey = "startHidden";
-const char* Settings::minimizeToTrayKey = "minimizeToTray";
+const char* Settings::closeToTrayKey = "closeToTray";
 const char* Settings::unloadInactiveGraphsKey = "unloadInactiveGraphs";
 const char* Settings::cableLevelColorsKey = "cableLevelColors";
 const char* Settings::midiOutLatencyKey = "midiOutLatency";
@@ -251,8 +251,8 @@ void Settings::setSystrayEnabled (bool enabled) { set (systrayKey, enabled); }
 bool Settings::unloadInactiveGraphs() const { return getBool (unloadInactiveGraphsKey, false); }
 void Settings::setUnloadInactiveGraphs (bool unload) { set (unloadInactiveGraphsKey, unload); }
 
-bool Settings::isMinimizeToTrayEnabled() const { return getBool (minimizeToTrayKey, true); }
-void Settings::setMinimizeToTrayEnabled (bool enabled) { set (minimizeToTrayKey, enabled); }
+bool Settings::isCloseToTrayEnabled() const { return getBool (closeToTrayKey, true); }
+void Settings::setCloseToTrayEnabled (bool enabled) { set (closeToTrayKey, enabled); }
 
 // legacy value was a bool: true meant "always"
 int Settings::getStartHiddenMode() const { return jlimit (0, 2, getInt (startHiddenKey, 0)); }

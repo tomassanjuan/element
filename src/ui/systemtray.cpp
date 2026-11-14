@@ -133,10 +133,6 @@ void SystemTray::mouseUp (const MouseEvent& ev)
         menu.show();
 #endif
     }
-    else
-    {
-        restoreMainWindow (*window);
-    }
 
     mouseUpAction = -1;
 }

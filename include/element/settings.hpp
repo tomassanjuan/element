@@ -45,7 +45,7 @@ public:
     static const char* oscHostEnabledKey;
     static const char* systrayKey;
     static const char* startHiddenKey;
-    static const char* minimizeToTrayKey;
+    static const char* closeToTrayKey;
     static const char* unloadInactiveGraphsKey;
     static const char* cableLevelColorsKey;
     static const char* midiOutLatencyKey;
@@ -141,8 +141,8 @@ public:
     void setUnloadInactiveGraphs (bool);
 
     /** Whether minimising the main window hides it to the system tray. */
-    bool isMinimizeToTrayEnabled() const;
-    void setMinimizeToTrayEnabled (bool);
+    bool isCloseToTrayEnabled() const;
+    void setCloseToTrayEnabled (bool);
 
     /** How the main window starts when the system tray is enabled:
         0 = Off (shown), 1 = Always hidden, 2 = Remember the last state. */

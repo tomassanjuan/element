@@ -119,31 +119,13 @@ void MainWindow::nameChangedSession()
 
 void MainWindow::closeButtonPressed()
 {
-    JUCEApplication* app (JUCEApplication::getInstance());
-    app->systemRequestedQuit();
-}
-
-void MainWindow::minimiseButtonPressed()
-{
-    auto& gui = *world.services().find<GuiService>();
-    if (world.settings().isSystrayEnabled() && world.settings().isMinimizeToTrayEnabled())
-        gui.commands().invokeDirectly (Commands::toggleUserInterface, true);
-    else
-        DocumentWindow::minimiseButtonPressed();
-}
-
-void MainWindow::minimisationStateChanged (bool isNowMinimised)
-{
-    if (! isNowMinimised || ! world.settings().isSystrayEnabled() || ! world.settings().isMinimizeToTrayEnabled())
+    if (world.settings().isSystrayEnabled() && world.settings().isCloseToTrayEnabled())
+    {
+        world.services().find<GuiService>()->commands().invokeDirectly (Commands::toggleUserInterface, true);
         return;
+    }
 
-    // The native title bar minimises without calling minimiseButtonPressed().
-    // Deferred because the window peer is still inside its own event handler.
-    MessageManager::callAsync ([safe = SafePointer<MainWindow> (this)]() {
-        if (safe == nullptr || ! safe->isOnDesktop())
-            return;
-        safe->world.services().find<GuiService>()->commands().invokeDirectly (Commands::toggleUserInterface, true);
-    });
+    JUCEApplication::getInstance()->systemRequestedQuit();
 }
 
 void MainWindow::activeWindowStatusChanged()

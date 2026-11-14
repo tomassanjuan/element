@@ -424,15 +424,15 @@ public:
         systray.init (*this, "Show system tray", settings.isSystrayEnabled(), [this]() {
             settings.setSystrayEnabled (systray.get());
             startHiddenBox.setEnabled (systray.get());
-            minimizeToTray.setEnabled (systray.get());
+            closeToTray.setEnabled (systray.get());
             gui.refreshSystemTray();
             settingChanged();
         });
-        minimizeToTray.init (*this, "Minimize to system tray", settings.isMinimizeToTrayEnabled(), [this]() {
-            settings.setMinimizeToTrayEnabled (minimizeToTray.get());
+        closeToTray.init (*this, "Close to system tray", settings.isCloseToTrayEnabled(), [this]() {
+            settings.setCloseToTrayEnabled (closeToTray.get());
             settingChanged();
         });
-        minimizeToTray.setEnabled (systray.get());
+        closeToTray.setEnabled (systray.get());
         unloadInactiveGraphs.init (*this, "Unload inactive graphs", settings.unloadInactiveGraphs(), [this]() {
             settings.setUnloadInactiveGraphs (unloadInactiveGraphs.get());
             if (auto* engine = gui.sibling<EngineService>())
@@ -569,7 +569,7 @@ public:
         layoutSetting (r, askToSaveSession);
         layoutSetting (r, mainContentLabel, mainContentBox, comboWidth);
         layoutSetting (r, systray);
-        layoutSetting (r, minimizeToTray);
+        layoutSetting (r, closeToTray);
         layoutSetting (r, unloadInactiveGraphs);
         layoutSetting (r, startHiddenLabel, startHiddenBox, comboWidth);
         layoutSetting (r, cableColors);
@@ -652,7 +652,7 @@ private:
     TextButton defaultSessionClearButton;
 
     BoolSettingRow systray;
-    BoolSettingRow minimizeToTray;
+    BoolSettingRow closeToTray;
     BoolSettingRow unloadInactiveGraphs;
     Label startHiddenLabel;
     ComboBox startHiddenBox;
