@@ -713,7 +713,7 @@ void GuiService::showPluginWindowsFor (const Node& node, const bool recursive, c
     if (! node.isGraph())
     {
         if (force || (bool) node.getProperty (tags::windowVisible, false))
-            presentPluginWindow (node, force);
+            presentPluginWindow (node, focus);
         return;
     }
 
@@ -1094,7 +1094,7 @@ bool GuiService::perform (const InvocationInfo& info)
             break;
         case Commands::showAllPluginWindows: {
             if (auto s = context().session())
-                showPluginWindowsFor (s->getActiveGraph(), true, true);
+                showPluginWindowsFor (s->getActiveGraph(), true, true, true);
             break;
         }
         case Commands::hideAllPluginWindows: {
