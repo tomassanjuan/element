@@ -583,6 +583,7 @@ void GuiService::adjustUiScale (double delta, bool reset)
     const auto scale = jlimit (0.5, 3.0, std::round (target * 20.0) / 20.0);
     prefs.setDesktopScale (scale);
     Desktop::getInstance().setGlobalScaleFactor ((float) prefs.getDesktopScale());
+    prefs.sendChangeMessage();
 }
 
 void GuiService::activateGraph (int index)

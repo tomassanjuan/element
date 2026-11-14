@@ -356,6 +356,7 @@ private:
 //==============================================================================
 class GeneralSettingsPage : public SettingsPage,
                             public Value::Listener,
+                            public ChangeListener,
                             public FilenameComponentListener
 {
 public:
@@ -526,10 +527,12 @@ public:
         jassert (settings.getMainContentType() == "standard");
         mainContentBox.setSelectedId (1, dontSendNotification);
         mainContentBox.getSelectedIdAsValue().addListener (this);
+        settings.addChangeListener (this);
     }
 
     virtual ~GeneralSettingsPage() noexcept
     {
+        settings.removeChangeListener (this);
         clockSource.removeListener (this);
         mainContentBox.getSelectedIdAsValue().removeListener (this);
         startHiddenBox.getSelectedIdAsValue().removeListener (this);
@@ -591,6 +594,11 @@ public:
             r.removeFromTop (spacingBetweenSections * 2);
             pluginSettings.setBounds (r);
         }
+    }
+
+    void changeListenerCallback (juce::ChangeBroadcaster*) override
+    {
+        desktopScale.setValue (settings.getDesktopScale(), dontSendNotification);
     }
 
     void valueChanged (Value& value) override
