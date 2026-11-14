@@ -119,14 +119,12 @@ private:
 
 //=============================================================================
 class ConnectorComponent : public Component,
-                           public SettableTooltipClient,
-                           private Timer
+                           public SettableTooltipClient
 {
 public:
     ConnectorComponent (const Node& g)
         : sourceFilterID (0), destFilterID (0), sourceFilterChannel (0), destFilterChannel (0), graph (g), lastInputX (0), lastInputY (0), lastOutputX (0), lastOutputY (0)
     {
-        startTimerHz (10);
     }
 
     ~ConnectorComponent() {}
@@ -158,7 +156,11 @@ public:
     }
 
     bool isDragging() const { return dragging; }
-    void setGraph (const Node& g) { graph = g; }
+    void setGraph (const Node& g)
+    {
+        graph = g;
+        resolveSource();
+    }
 
     void setInput (const uint32 sourceFilterID_, const int sourceFilterChannel_)
     {
@@ -166,6 +168,7 @@ public:
         {
             sourceFilterID = sourceFilterID_;
             sourceFilterChannel = sourceFilterChannel_;
+            resolveSource();
             update();
         }
     }
@@ -251,24 +254,17 @@ public:
         g.fillPath (linePath);
     }
 
-    void timerCallback() override
+    /** Recomputes the level colour from the source output peak, repainting on change. */
+    void updateLevelColour (bool enabled)
     {
-        if (! isShowing())
-            return;
-
-        // when disabled, idle at 1 Hz just to notice the setting being turned back on
-        auto* globals = ViewHelpers::getGlobals (this);
-        const bool enabled = globals != nullptr && globals->settings().isCableLevelColorsEnabled();
-        startTimer (enabled ? 100 : 1000);
-
         std::optional<Colour> next;
         if (enabled && sourceFilterID != 0 && sourceFilterID != EL_INVALID_PORT)
         {
-            if (ProcessorPtr src = graph.getNodeById (sourceFilterID).getObject())
-            {
-                if (src->getPortType ((uint32) sourceFilterChannel) == PortType::Audio)
-                    next = colourForLevel (src->getOutputPeak (src->getChannelPort ((uint32) sourceFilterChannel)));
-            }
+            if (sourceProcessor == nullptr)
+                resolveSource();
+
+            if (sourceProcessor != nullptr && sourceProcessor->getPortType ((uint32) sourceFilterChannel) == PortType::Audio)
+                next = colourForLevel (sourceProcessor->getOutputPeak (sourceProcessor->getChannelPort ((uint32) sourceFilterChannel)));
         }
 
         if (next != levelColour)
@@ -412,6 +408,14 @@ private:
     bool dragging { false };
     bool hover { false };
     std::optional<Colour> levelColour;
+    ProcessorPtr sourceProcessor;
+
+    void resolveSource()
+    {
+        sourceProcessor = (sourceFilterID != 0 && sourceFilterID != EL_INVALID_PORT)
+                              ? ProcessorPtr (graph.getNodeById (sourceFilterID).getObject())
+                              : ProcessorPtr();
+    }
 
     GraphEditorComponent* getGraphPanel() const noexcept
     {
@@ -455,10 +459,12 @@ GraphEditorComponent::GraphEditorComponent()
     setOpaque (true);
     data.addListener (this);
     setSize (640, 360);
+    startTimer (100);
 }
 
 GraphEditorComponent::~GraphEditorComponent()
 {
+    stopTimer();
     if (graph.isValid())
         graph.setProperty (tags::vertical, verticalLayout);
     data.removeListener (this);
@@ -794,6 +800,25 @@ PortComponent* GraphEditorComponent::findPinAt (const int x, const int y) const
 
 void GraphEditorComponent::resized()
 {
+}
+
+void GraphEditorComponent::timerCallback()
+{
+    if (! isShowing())
+        return;
+
+    // when disabled, idle at 1 Hz just to notice the setting being turned back on
+    auto* globals = ViewHelpers::getGlobals (this);
+    const bool enabled = globals != nullptr && globals->settings().isCableLevelColorsEnabled();
+    if (enabled != cableLevelColorsEnabled)
+    {
+        cableLevelColorsEnabled = enabled;
+        startTimer (enabled ? 100 : 1000);
+    }
+
+    for (auto* child : getChildren())
+        if (auto* cc = dynamic_cast<ConnectorComponent*> (child))
+            cc->updateLevelColour (enabled);
 }
 
 void GraphEditorComponent::changeListenerCallback (ChangeBroadcaster*)
