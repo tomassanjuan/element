@@ -665,7 +665,7 @@ void EngineService::addNode (const Node& _node)
     {
         const Node actual (root->getNodeModelForId (nodeId));
         if (context().settings().showPluginWindowsWhenAdded())
-            sibling<GuiService>()->presentPluginWindow (actual);
+            sibling<GuiService>()->presentPluginWindow (actual, true);
     }
     else
     {
@@ -704,7 +704,7 @@ Node EngineService::addPlugin (const PluginDescription& desc, const bool verifie
         {
             node = root->getNodeModelForId (nodeId);
             if (! dontShowUI && context().settings().showPluginWindowsWhenAdded())
-                sibling<GuiService>()->presentPluginWindow (node);
+                sibling<GuiService>()->presentPluginWindow (node, true);
         }
     }
     else
@@ -1065,7 +1065,7 @@ Node EngineService::addPlugin (GraphManager& c, const PluginDescription& desc)
 
         const Node node (c.getNodeModelForId (nodeId));
         if (context().settings().showPluginWindowsWhenAdded())
-            sibling<GuiService>()->presentPluginWindow (node);
+            sibling<GuiService>()->presentPluginWindow (node, true);
         if (! node.isValid())
         {
             jassertfalse; // fatal, but continue
@@ -1221,7 +1221,7 @@ void EngineService::replace (const Node& node, const PluginDescription& desc)
 
             removeNode (node);
             if (wasWindowOpen)
-                sibling<GuiService>()->presentPluginWindow (newNode);
+                sibling<GuiService>()->presentPluginWindow (newNode, true);
         }
     }
 

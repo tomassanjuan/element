@@ -140,12 +140,15 @@ public:
 
     PluginWindow* createPluginWindowFor (const Node& node);
 
+    /** Closes the plugin window that is the foreground window, if any.
+
+        @return true if a window was closed
+    */
+    bool closeForegroundPluginWindow();
+
 private:
     GuiService& gui;
     void* escapeHook = nullptr;
-public:
-    bool closeForegroundPluginWindow();
-private:
     OwnedArray<PluginWindow> activePluginWindows;
     OwnedArray<Window> activeWindows;
     OwnedArray<DialogWindow> activeDialogs;

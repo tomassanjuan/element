@@ -148,9 +148,7 @@ struct VuLevelMeter : public Component,
         g.fillRect (box);
 
         g.setColour (clip.isClipped() ? Colours::white
-                     : levelDb > 0.f  ? Colour (0xffe5484d)
-                     : levelDb > -6.f ? Colour (0xfff2a900)
-                                      : Colours::white);
+                     : levelmeter::colourFor (levelDb, Colours::white));
         float size = 11.f;
         Font font (FontOptions (size, Font::bold));
         while (size > 6.f && GlyphArrangement::getStringWidthInt (font, levelText) > box.getWidth() - 4)
@@ -182,15 +180,12 @@ struct VuLevelMeter : public Component,
         meter.refresh();
 
         const bool wasClipped = clip.isClipped();
-        if (level >= 1.0f)
-            clip.hit();
-        clip.update();
+        clip.update (level >= 1.0f);
 
         const auto dB = Decibels::gainToDecibels (level, -60.f);
         const bool colourChanged = (dB > 0.f) != (levelDb > 0.f) || (dB > -6.f) != (levelDb > -6.f);
         levelDb = dB;
-        const auto text = dB <= -60.f ? String ("-inf")
-                                      : String (dB, getWidth() >= 24 ? 1 : 0);
+        const auto text = levelmeter::textFor (dB, getWidth() >= 24 ? 1 : 0);
 
         if (wasClipped != clip.isClipped() || colourChanged || text != levelText)
         {

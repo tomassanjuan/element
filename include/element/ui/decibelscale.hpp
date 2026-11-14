@@ -50,4 +50,30 @@ private:
     int levels[LevelCount];
 };
 
+/** Shared level metering constants and display helpers. */
+namespace levelmeter {
+
+/** RMS calibration so a full scale sine reads 0 dB, as on a digital meter. */
+static constexpr float rmsCalibrationDb = 3.0103f;
+
+/** Level at or below which a readout shows "-inf". */
+static constexpr float floorDb = -60.f;
+
+static const juce::Colour overColour (0xffe5484d);
+static const juce::Colour warnColour (0xfff2a900);
+
+/** Warning colour for a level: red above 0 dB, amber above -6 dB, otherwise @p normal. */
+inline juce::Colour colourFor (float dB, juce::Colour normal)
+{
+    return dB > 0.f ? overColour : dB > -6.f ? warnColour : normal;
+}
+
+/** Readout text for a level in dB. */
+inline juce::String textFor (float dB, int decimals = 1)
+{
+    return dB <= floorDb ? juce::String ("-inf") : juce::String (dB, decimals);
+}
+
+} // namespace levelmeter
+
 } // namespace element

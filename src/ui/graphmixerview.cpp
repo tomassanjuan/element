@@ -399,8 +399,7 @@ private:
             meter.setValue (0, rms);
             meter.refresh();
 
-            // same +3 dB RMS calibration as the strip meters
-            const float newDb = Decibels::gainToDecibels (rms, -100.f) + 3.0103f;
+            const float newDb = Decibels::gainToDecibels (rms, -100.f) + levelmeter::rmsCalibrationDb;
             if (std::abs (newDb - db) >= 0.1f)
             {
                 db = newDb;
@@ -417,8 +416,8 @@ private:
             g.setColour (Colors::textColor);
             g.drawText (String (number), r.removeFromTop (readoutHeight / 2), Justification::centred, false);
             g.setFont (Font (FontOptions (11.f, Font::bold)));
-            g.setColour (db > 0.f ? Colour (0xffe5484d) : db > -6.f ? Colour (0xfff2a900) : Colors::textColor);
-            g.drawText (db <= -60.f ? String ("-inf") : String (db, 1), r, Justification::centred, false);
+            g.setColour (levelmeter::colourFor (db, Colors::textColor));
+            g.drawText (levelmeter::textFor (db), r, Justification::centred, false);
         }
 
     private:

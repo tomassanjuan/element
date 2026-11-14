@@ -92,7 +92,7 @@ public:
     void activateGraph (int index);
 
     /** present a plugin window */
-    void presentPluginWindow (const Node& node, const bool focus = true);
+    void presentPluginWindow (const Node& node, const bool focus);
 
     /** Sync all UI elements with application/plugin */
     void stabilizeContent();

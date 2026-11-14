@@ -95,15 +95,10 @@ public:
     */
     inline void setLevelDb (float dB)
     {
-        levelLabel.setText (dB <= -60.f ? juce::String ("-inf") : juce::String (dB, 1),
-                            juce::dontSendNotification);
+        levelLabel.setText (levelmeter::textFor (dB), juce::dontSendNotification);
         levelLabel.setColour (juce::Label::textColourId,
-                              dB > 0.f    ? juce::Colour (0xffe5484d)
-                              : dB > -6.f ? juce::Colour (0xfff2a900)
-                                          : juce::Colours::white.withAlpha (0.8f));
-        if (dB > 0.f)
-            clip.hit();
-        clip.update();
+                              levelmeter::colourFor (dB, juce::Colours::white.withAlpha (0.8f)));
+        clip.update (dB > 0.f);
         clipLight.setLit (clip.isClipped());
     }
 

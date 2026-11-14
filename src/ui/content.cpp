@@ -10,6 +10,7 @@
 #include <element/ui.hpp>
 #include <element/ui/commands.hpp>
 #include <element/ui/content.hpp>
+#include <element/ui/decibelscale.hpp>
 #include <element/ui/preferences.hpp>
 #include <element/ui/style.hpp>
 
@@ -429,8 +430,8 @@ public:
             streamingStatusLabel.setText (text, dontSendNotification);
             // red above 90 % CPU, amber above 70 % or after any drop
             streamingStatusLabel.setColour (Label::textColourId,
-                                            cpu > 90.f ? Colour (0xffe5484d)
-                                            : (cpu > 70.f || drops > 0) ? Colour (0xfff2a900)
+                                            cpu > 90.f ? levelmeter::overColour
+                                            : (cpu > 70.f || drops > 0) ? levelmeter::warnColour
                                                                         : Colour (Colors::textColor));
 
             statusLabel.setText (String ("Device: ") + dev->getName(), dontSendNotification);

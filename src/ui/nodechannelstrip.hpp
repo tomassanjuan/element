@@ -144,8 +144,7 @@ public:
                     feed (c, rms (c));
             }
 
-            // same +3 dB RMS calibration as SimpleMeter, so the number matches the meter
-            channelStrip.setLevelDb (Decibels::gainToDecibels (level, -100.f) + 3.0103f);
+            channelStrip.setLevelDb (Decibels::gainToDecibels (level, -100.f) + levelmeter::rmsCalibrationDb);
 
             const auto cv = getCurrentVolume();
             if (static_cast<float> (channelStrip.getVolume()) != cv)

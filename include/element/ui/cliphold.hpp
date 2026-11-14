@@ -24,6 +24,17 @@ public:
 
     bool isClipped() const noexcept { return clipped; }
 
+    /** Latches the clip state when @p clipping, then releases it after the hold time.
+
+        @return true if the state was released by this call
+    */
+    bool update (bool clipping) noexcept
+    {
+        if (clipping)
+            hit();
+        return update();
+    }
+
     /** Releases the clip state when the hold time has passed.
 
         @return true if the state was released by this call
