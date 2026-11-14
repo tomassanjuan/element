@@ -204,7 +204,6 @@ BlockComponent::BlockComponent (const Node& graph_, const Node& node_, const boo
       embedInit (*this),
       latencyHint (*this)
 {
-    latencyHint.startTimer (1000);
     nodeObject = node.getPropertyAsValue (tags::object, true);
     obj = node.getObject();
     jassert (obj != nullptr);
@@ -469,6 +468,19 @@ bool BlockComponent::isSelected() const noexcept
 void BlockComponent::setPowerButtonVisible (bool visible) { setButtonVisible (powerButton, visible); }
 void BlockComponent::setConfigButtonVisible (bool visible) { setButtonVisible (configButton, visible); }
 void BlockComponent::setMuteButtonVisible (bool visible) { setButtonVisible (muteButton, visible); }
+
+void BlockComponent::visibilityChanged()
+{
+    if (isVisible())
+    {
+        latencyHint.startTimer (1000);
+        latencyHint.timerCallback();
+    }
+    else
+    {
+        latencyHint.stopTimer();
+    }
+}
 
 void BlockComponent::valueChanged (Value& value)
 {

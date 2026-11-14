@@ -239,7 +239,13 @@ void Processor::setOutputRMS (int chan, float rms, int numSamples, float blockPe
 
     static constexpr double peakFallSeconds = 0.25;
     const double fs = sampleRate > 0.0 ? sampleRate : 44100.0;
-    const float decayed = meter.peak.get() * (float) std::exp (-(double) numSamples / (peakFallSeconds * fs));
+    if (numSamples != peakDecayBlock || fs != peakDecayRate)
+    {
+        peakDecayBlock = numSamples;
+        peakDecayRate = fs;
+        peakDecay = (float) std::exp (-(double) numSamples / (peakFallSeconds * fs));
+    }
+    const float decayed = meter.peak.get() * peakDecay;
     meter.peak.set (std::max (blockPeak, decayed));
 }
 

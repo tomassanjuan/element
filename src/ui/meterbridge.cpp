@@ -22,8 +22,21 @@ struct SimpleLevelMeter : public Component,
     SimpleLevelMeter (AudioEnginePtr e, int channel, bool input)
     {
         setOpaque (false);
-        startTimerHz (20);
         meter = e->getLevelMeter (channel, input);
+    }
+
+    void visibilityChanged() override
+    {
+        if (isVisible())
+        {
+            startTimerHz (20);
+            timerCallback();
+        }
+        else
+        {
+            stopTimer();
+            level = 0;
+        }
     }
 
     void timerCallback() override
@@ -131,7 +144,19 @@ struct VuLevelMeter : public Component,
         addAndMakeVisible (meter);
         // clicks go to this component so they clear the clip light and the held peak
         meter.setInterceptsMouseClicks (false, false);
-        startTimerHz (20);
+    }
+
+    void visibilityChanged() override
+    {
+        if (isVisible())
+        {
+            startTimerHz (20);
+            timerCallback();
+        }
+        else
+        {
+            stopTimer();
+        }
     }
 
     void resized() override
@@ -139,6 +164,15 @@ struct VuLevelMeter : public Component,
         auto r = getLocalBounds();
         r.removeFromTop (readoutHeight + 2);
         meter.setBounds (r);
+        updateReadoutFont();
+    }
+
+    void updateReadoutFont()
+    {
+        float size = 11.f;
+        readoutFont = Font (FontOptions (size, Font::bold));
+        while (size > 6.f && GlyphArrangement::getStringWidthInt (readoutFont, levelText) > getWidth() - 4)
+            readoutFont = Font (FontOptions (size -= 0.5f, Font::bold));
     }
 
     void paint (Graphics& g) override
@@ -149,12 +183,7 @@ struct VuLevelMeter : public Component,
 
         g.setColour (clip.isClipped() ? Colours::white
                      : levelmeter::colourFor (levelDb, Colours::white));
-        float size = 11.f;
-        Font font (FontOptions (size, Font::bold));
-        while (size > 6.f && GlyphArrangement::getStringWidthInt (font, levelText) > box.getWidth() - 4)
-            font = Font (FontOptions (size -= 0.5f, Font::bold));
-
-        g.setFont (font);
+        g.setFont (readoutFont);
         g.drawText (levelText, box, Justification::centred, false);
     }
 
@@ -190,6 +219,7 @@ struct VuLevelMeter : public Component,
         if (wasClipped != clip.isClipped() || colourChanged || text != levelText)
         {
             levelText = text;
+            updateReadoutFont();
             repaint();
         }
     }
@@ -198,6 +228,7 @@ struct VuLevelMeter : public Component,
     AudioEngine::LevelMeterPtr levelMeter;
     ClipHold clip;
     String levelText { "-inf" };
+    Font readoutFont { FontOptions (11.f, Font::bold) };
     float levelDb = -60.f;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (VuLevelMeter)

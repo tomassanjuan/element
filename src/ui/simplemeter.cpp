@@ -125,8 +125,8 @@ void SimpleMeterValue::paint (Graphics& g)
     }
 
     const bool standard = SimpleMeter::getColorScheme() == SimpleMeter::ColorScheme::Standard;
-    const int posYellow = meter->getIECScale (-12.f);
-    const int posRed = meter->getIECScale (-3.f);
+    const int posYellow = standard ? meter->getIECScale (-12.f) : 0;
+    const int posRed = standard ? meter->getIECScale (-3.f) : 0;
     const auto standardColour = [posYellow, posRed] (int position) {
         return position > posRed ? Colours::red : position > posYellow ? Colours::yellow
                                                                         : Colours::limegreen;

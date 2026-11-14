@@ -243,6 +243,8 @@ public:
     void paintOverChildren (Graphics& g) override;
     /** @internal */
     void resized() override;
+    /** @internal */
+    void visibilityChanged() override;
 
     bool isInterestedInDragSource (const SourceDetails& details) override;
     void itemDropped (const SourceDetails& details) override;
