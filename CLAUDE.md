@@ -133,6 +133,13 @@ Committed after `6b4589f8` as separate commits on this branch (see `git log`), l
 - Meters (`simplemeter.*`, `cliphold.hpp`): peak hold line turns red when the level goes over 0 dB and clears after 5 s without a clip or on click (`ClipHold`). New Preferences > General "Meter colors": Original, or Standard (green below -6 dB, yellow to 0, red above), stored as `Settings::meterColorScheme` (`SimpleMeter::setColorScheme`).
 - Meter bridge (`meterbridge.*`): labels renamed IN/OUT. In the mixer's VU style each meter has a box on top showing the level in dB that turns red on clipping (click to clear).
 
+Later commits on this branch, all user-tested and working unless noted:
+- Preferences > Desktop scale slider follows Ctrl+scroll zoom while the dialog is open (`GuiService::adjustUiScale` notifies Settings listeners, `GeneralSettingsPage` listens).
+- `util/install-local.ps1`: quits Element via WM_QUERYENDSESSION, installs and restarts it. Works from the tray.
+- Esc closes the foreground plugin window, also when the plugin editor has native focus (WH_KEYBOARD hook in `WindowManager`, Windows only).
+- New plugin windows opened by double-click on a block take focus. Root cause: `ViewHelpers::presentPluginWindow` still called with the old `focus = false` default because `viewhelpers.obj` was not rebuilt after the default changed in `ui.hpp`. It now passes `true` explicitly. If a default argument in a header seems ignored, check that object's timestamp in `build/src/element.dir/Release/`.
+- macOS, not compiled or tested here: Cmd+W hides the main window to the menu bar icon (or the app), in `KeyPressManager`.
+
 ## Open jobs
 
 - Menu bar (File/Edit) item highlight is missing. Cause not found: the bar is a standard JUCE `MenuBarComponent`, `LookAndFeel_E1::drawMenuBarItem` (`style_v1.cpp`) delegates to V3/V2, and `PopupMenu::highlightedBackgroundColourId` is set to `Colors::elemental` in the E1 constructor. Need from the user: missing on hover, on click, or both. Probably needs a look at the running app.
