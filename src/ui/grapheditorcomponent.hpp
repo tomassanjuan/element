@@ -22,6 +22,7 @@ class GraphEditorComponent : public Component,
                              public DragAndDropTarget,
                              public FileDragAndDropTarget,
                              private ValueTree::Listener,
+                             private Timer,
                              public ViewHelperMixin,
                              public LassoSource<uint32>
 {
@@ -120,6 +121,9 @@ private:
     } selectedNodes;
 
     bool ignoreNodeSelected = false;
+    bool cableLevelColorsEnabled = true;
+
+    void timerCallback() override;
 
     float zoomScale = 1.0;
 
