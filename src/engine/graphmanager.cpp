@@ -13,7 +13,6 @@
 #include "nodes/placeholder.hpp"
 #include "engine/rootgraph.hpp"
 
-#include "tracer.hpp"
 #include "utils.hpp"
 
 namespace element {
@@ -345,7 +344,6 @@ bool GraphManager::contains (const uint32 nodeId) const
 
 Processor* GraphManager::createFilter (const PluginDescription* desc, double x, double y, uint32 nodeId)
 {
-    EL_LOAD_TRACE (String ("createFilter: ") + desc->name);
     String errorMessage;
     auto node = std::unique_ptr<Processor> (
         pluginManager.createGraphNode (*desc, errorMessage));
@@ -661,7 +659,6 @@ void GraphManager::removeConnection (uint32 sourceNode, uint32 sourcePort, uint3
 
 void GraphManager::setNodeModel (const Node& node)
 {
-    EL_LOAD_TRACE (String ("setNodeModel: ") + node.getName());
     loaded = false;
     unloaded = false;
 
@@ -764,7 +761,6 @@ void GraphManager::setNodeModel (const Node& node)
     failed.clearQuick();
 
     {
-        EL_LOAD_TRACE ("setNodeModel: enforce IO + sync arcs");
         IONodeEnforcer enforceIONodes (*this);
         processorArcsChanged();
     }
@@ -876,7 +872,6 @@ void GraphManager::setupNode (const ValueTree& data, ProcessorPtr obj)
 
     if (auto* const proc = obj->getAudioProcessor())
     {
-        EL_LOAD_TRACE (String ("setupNode: buses: ") + node.getName());
         bool busesConfigured = false;
         {
             // try to load buses layout.
@@ -948,7 +943,6 @@ void GraphManager::setupNode (const ValueTree& data, ProcessorPtr obj)
     }
 
     {
-        EL_LOAD_TRACE (String ("setupNode: restore state: ") + node.getName());
         // A subgraph's descendants were already restored one-by-one by the
         // child GraphManager the Binding created above — restoring them again
         // here would call setStateInformation twice per nesting level.
@@ -958,7 +952,6 @@ void GraphManager::setupNode (const ValueTree& data, ProcessorPtr obj)
             node.restorePluginState();
     }
     {
-        EL_LOAD_TRACE (String ("setupNode: reset ports: ") + node.getName());
         node.resetPorts();
     }
 

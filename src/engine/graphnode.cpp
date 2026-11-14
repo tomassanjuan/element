@@ -11,7 +11,6 @@
 #include "engine/ionode.hpp"
 #include "nodes/audioprocessor.hpp"
 #include "engine/graphnode.hpp"
-#include "tracer.hpp"
 
 #ifndef EL_GRAPH_NODE_NAME
 #define EL_GRAPH_NODE_NAME "Graph"
@@ -433,8 +432,6 @@ bool GraphNode::isAnInputTo (const uint32 possibleInputId,
 
 void GraphNode::buildRenderingSequence()
 {
-    EL_LOAD_TRACE (String ("buildRenderingSequence: ") + getName());
-    EL_LOAD_TRACE_COUNT ("buildRenderingSequence");
     Array<void*> newRenderingOps;
     int numRenderingBuffersNeeded = 2;
     int numMidiBuffersNeeded = 1;

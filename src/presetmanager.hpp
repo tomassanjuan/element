@@ -8,7 +8,6 @@
 
 #include <element/datapath.hpp>
 
-#include "tracer.hpp"
 
 namespace element {
 
@@ -52,7 +51,6 @@ public:
 
     inline void refresh()
     {
-        EL_LOAD_TRACE ("PresetManager::refresh");
         clear();
 
         StringArray files;

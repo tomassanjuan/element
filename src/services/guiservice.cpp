@@ -18,7 +18,6 @@
 
 #include "auth.hpp"
 #include "engine/midipanic.hpp"
-#include "tracer.hpp"
 #include "messages.hpp"
 #include "services/mappingservice.hpp"
 #include "services/sessionservice.hpp"
@@ -724,7 +723,6 @@ void GuiService::showPluginWindowsFor (const Node& node, const bool recursive, c
 
 void GuiService::presentPluginWindow (const Node& node, const bool focus)
 {
-    EL_LOAD_TRACE (String ("presentPluginWindow: ") + node.getName());
     if (! windowManager)
         return;
 
@@ -1250,7 +1248,6 @@ bool GuiService::perform (const InvocationInfo& info)
 
 void GuiService::stabilizeContent()
 {
-    EL_LOAD_TRACE ("GuiService::stabilizeContent");
     if (auto* cc = _content.get())
         cc->stabilize();
     refreshMainMenu();
