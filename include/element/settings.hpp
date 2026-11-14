@@ -144,8 +144,6 @@ public:
     bool isMinimizeToTrayEnabled() const;
     void setMinimizeToTrayEnabled (bool);
 
-    /** True if the main window should start hidden in the system tray.
-        Only meaningful when the system tray is enabled and available. */
     /** How the main window starts when the system tray is enabled:
         0 = Off (shown), 1 = Always hidden, 2 = Remember the last state. */
     int getStartHiddenMode() const;
