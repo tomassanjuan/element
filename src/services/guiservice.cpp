@@ -769,6 +769,11 @@ void GuiService::presentPluginWindow (const Node& node, const bool focus)
                 if (sp == nullptr)
                     return;
                 sp->toFront (true);
+#if JUCE_WINDOWS
+                // JUCE only calls BringWindowToTop, which does not always activate the window.
+                if (auto* peer = sp->getPeer())
+                    SetForegroundWindow ((HWND) peer->getNativeHandle());
+#endif
                 sp->grabKeyboardFocus();
             });
         }
