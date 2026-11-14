@@ -83,21 +83,45 @@ private:
 class AddChannelOp : public GraphOp
 {
 public:
-    AddChannelOp (const int srcChannelNum_, const int dstChannelNum_)
+    AddChannelOp (const int srcChannelNum_, const int dstChannelNum_, const float gain_ = 1.0f)
         : srcChannelNum (srcChannelNum_),
-          dstChannelNum (dstChannelNum_)
+          dstChannelNum (dstChannelNum_),
+          gain (gain_)
     {
     }
 
     void perform (AudioSampleBuffer& sharedBufferChans, const OwnedArray<MidiBuffer>&, const int numSamples)
     {
-        sharedBufferChans.addFrom (dstChannelNum, 0, sharedBufferChans, srcChannelNum, 0, numSamples);
+        sharedBufferChans.addFrom (dstChannelNum, 0, sharedBufferChans, srcChannelNum, 0, numSamples, gain);
     }
 
 private:
     const int srcChannelNum, dstChannelNum;
+    const float gain;
 
     JUCE_DECLARE_NON_COPYABLE (AddChannelOp)
+};
+
+/** Scales a channel in place. Only used on buffers this node owns. */
+class GainChannelOp : public GraphOp
+{
+public:
+    GainChannelOp (const int channelNum_, const float gain_)
+        : channelNum (channelNum_),
+          gain (gain_)
+    {
+    }
+
+    void perform (AudioSampleBuffer& sharedBufferChans, const OwnedArray<MidiBuffer>&, const int numSamples)
+    {
+        sharedBufferChans.applyGain (channelNum, 0, numSamples, gain);
+    }
+
+private:
+    const int channelNum;
+    const float gain;
+
+    JUCE_DECLARE_NON_COPYABLE (GainChannelOp)
 };
 
 class ClearMidiBufferOp : public GraphOp
@@ -232,9 +256,16 @@ public:
 
     void perform (AudioSampleBuffer& sharedBufferChans, const OwnedArray<MidiBuffer>& sharedMidiBuffers, const int numSamples)
     {
+        struct Timer
+        {
+            Processor& proc;
+            const int64 start = Time::getHighResolutionTicks();
+            ~Timer() { proc.addRenderTime ((float) (Time::highResolutionTicksToSeconds (Time::getHighResolutionTicks() - start) * 1000.0)); }
+        } timer { *node };
+
         for (int i = totalChans; --i >= 0;)
         {
-            channels[i] = sharedBufferChans.getWritePointer (audioChannelsToUse.getUnchecked (i), 0);
+            channels[i] =sharedBufferChans.getWritePointer (audioChannelsToUse.getUnchecked (i), 0);
         }
 
         AudioSampleBuffer buffer (channels, totalChans, numSamples);
@@ -448,7 +479,7 @@ public:
         lastMute = muted;
 
         for (int i = 0; i < numAudioOuts; ++i)
-            node->setOutputRMS (i, buffer.getRMSLevel (i, 0, numSamples), numSamples);
+            node->setOutputRMS (i, buffer.getRMSLevel (i, 0, numSamples), numSamples, buffer.getMagnitude (i, 0, numSamples));
     }
 
     const ProcessorPtr node;
@@ -600,6 +631,7 @@ void GraphBuilder::createRenderingOpsForNode (Processor* const node,
         // get a list of all the inputs to this node
         Array<uint32> sourceNodes;
         Array<uint32> sourcePorts;
+        Array<float> sourceGains;
         for (int i = graph.getNumConnections(); --i >= 0;)
         {
             const auto* const c = graph.getConnection (i);
@@ -612,6 +644,7 @@ void GraphBuilder::createRenderingOpsForNode (Processor* const node,
                 {
                     sourceNodes.add (c->sourceNode);
                     sourcePorts.add (c->sourcePort);
+                    sourceGains.add (c->gain);
                 }
             }
         }
@@ -648,14 +681,18 @@ void GraphBuilder::createRenderingOpsForNode (Processor* const node,
             const uint32 srcPort = sourcePorts.getUnchecked (0);
 
             bufIndex = getBufferContaining (portType, srcNode, srcPort);
+            const bool sourceMissing = bufIndex < 0;
 
-            if (bufIndex < 0)
+            if (sourceMissing)
             {
                 // if not found, this is probably a feedback loop
                 bufIndex = getReadOnlyEmptyBuffer();
                 jassert (bufIndex >= 0);
             }
 
+            const float srcGain = sourceGains.getUnchecked (0);
+            // a missing source is the shared read-only silent buffer: nothing to scale
+            const bool needsGain = portType.isAudio() && srcGain != 1.0f && ! sourceMissing;
             const bool bufNeededLater = isBufferNeededLater (ourRenderingIndex, port, srcNode, srcPort);
             if (portType == PortType::Control)
             {
@@ -664,7 +701,7 @@ void GraphBuilder::createRenderingOpsForNode (Processor* const node,
                     src->getParameter ((int) srcPort),
                     node->getParameter ((int) port)));
             }
-            else if (bufNeededLater && (inputChan < (int) numOuts || portType == PortType::Midi))
+            else if (bufNeededLater && (inputChan < (int) numOuts || portType == PortType::Midi || needsGain))
             {
                 // can't mess up this channel because it's needed later by another node, so we
                 // need to use a copy of it..
@@ -691,6 +728,10 @@ void GraphBuilder::createRenderingOpsForNode (Processor* const node,
 
                 if (nodeDelay < maxLatency)
                     renderingOps.add (new DelayChannelOp (bufIndex, maxLatency - nodeDelay));
+
+                // bufIndex is now exclusively ours: either a copy, or a source buffer nobody needs later
+                if (needsGain)
+                    renderingOps.add (new GainChannelOp (bufIndex, srcGain));
             }
         }
         else
@@ -718,6 +759,9 @@ void GraphBuilder::createRenderingOpsForNode (Processor* const node,
                         const int nodeDelay = getNodeDelay (sourceNodes.getUnchecked (i));
                         if (nodeDelay < maxLatency)
                             renderingOps.add (new DelayChannelOp (sourceBufIndex, maxLatency - nodeDelay));
+
+                        if (sourceGains.getUnchecked (i) != 1.0f)
+                            renderingOps.add (new GainChannelOp (sourceBufIndex, sourceGains.getUnchecked (i)));
                     }
 
                     break;
@@ -756,6 +800,10 @@ void GraphBuilder::createRenderingOpsForNode (Processor* const node,
                     const int nodeDelay = getNodeDelay (sourceNodes.getFirst());
                     if (nodeDelay < maxLatency)
                         renderingOps.add (new DelayChannelOp (bufIndex, maxLatency - nodeDelay));
+
+                    // only when the source was found: otherwise bufIndex was just cleared
+                    if (srcIndex >= 0 && sourceGains.getFirst() != 1.0f)
+                        renderingOps.add (new GainChannelOp (bufIndex, sourceGains.getFirst()));
                 }
             }
 
@@ -785,7 +833,7 @@ void GraphBuilder::createRenderingOpsForNode (Processor* const node,
                                 }
                             }
 
-                            renderingOps.add (new AddChannelOp (srcIndex, bufIndex));
+                            renderingOps.add (new AddChannelOp (srcIndex, bufIndex, sourceGains.getUnchecked (j)));
                         }
                         else if (portType == PortType::Midi)
                         {

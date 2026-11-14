@@ -49,14 +49,58 @@ public:
 
             g.fillRect (0, 0, width - gridPadding, height - gridPadding);
         }
+
+        if (matrix.connected (row, column))
+        {
+            const auto db = editor.getGainDb (row, column);
+            if (std::abs (db) >= 0.05f)
+            {
+                g.setColour (Colours::white);
+                g.setFont (11.0f);
+                g.drawText (String (db, 1), 0, 0, width - gridPadding, height - gridPadding, Justification::centred, false);
+            }
+        }
     }
 
     void matrixCellClicked (const int row, const int col, const MouseEvent& ev) override
     {
-        ignoreUnused (ev);
         auto& matrix = editor.getMatrixState();
+
+        if (ev.mods.isPopupMenu())
+        {
+            if (! matrix.connected (row, col))
+                return;
+
+            PopupMenu menu;
+            const float levels[] = { 12.0f, 9.0f, 6.0f, 3.0f, 0.0f, -3.0f, -6.0f, -9.0f, -12.0f, -18.0f };
+            for (int i = 0; i < (int) std::size (levels); ++i)
+                menu.addItem (i + 1, String (levels[i], 0) + " dB", true, std::abs (editor.getGainDb (row, col) - levels[i]) < 0.05f);
+
+            menu.showMenuAsync (PopupMenu::Options(), [safe = Component::SafePointer<AudioRouterMatrix> (this), row, col, levels] (int result) {
+                if (safe != nullptr && result > 0)
+                {
+                    safe->editor.setGainDb (row, col, levels[result - 1]);
+                    safe->repaint();
+                }
+            });
+            return;
+        }
+
         matrix.toggleCell (row, col);
         editor.applyMatrix();
+        repaint();
+    }
+
+    void mouseWheelMove (const MouseEvent& ev, const MouseWheelDetails& wheel) override
+    {
+        const int row = getRowForPixel (ev.y);
+        const int col = getColumnForPixel (ev.x);
+        if (row < 0 || col < 0 || row >= getNumRows() || col >= getNumColumns()
+            || ! editor.getMatrixState().connected (row, col))
+            return;
+
+        const float step = ev.mods.isShiftDown() ? 0.1f : 0.5f;
+        editor.setGainDb (row, col, editor.getGainDb (row, col) + (wheel.deltaY > 0 ? step : -step));
         repaint();
     }
 
@@ -82,12 +126,13 @@ public:
 
         onClick = [this]() {
             PopupMenu menu;
-            menu.addItem (2, "2x2", true, false);
-            menu.addItem (4, "4x4", true, false);
-            menu.addItem (8, "8x8", true, false);
-            menu.addItem (10, "10x10", true, false);
-            menu.addItem (12, "12x12", true, false);
-            menu.addItem (16, "16x16", true, false);
+            menu.addItem (presetDownmix51, "5.1 to Stereo downmix");
+            menu.addItem (presetDownmix51Sub, "5.1 to Stereo + Sub");
+            menu.addSeparator();
+            // item id encodes the size: ins * 100 + outs
+            const std::pair<int, int> sizes[] = { { 2, 2 }, { 4, 4 }, { 6, 2 }, { 6, 6 }, { 8, 2 }, { 8, 8 }, { 10, 10 }, { 12, 12 }, { 16, 16 } };
+            for (const auto& [ins, outs] : sizes)
+                menu.addItem (ins * 100 + outs, String (ins) + "x" + String (outs));
             menu.showMenuAsync (PopupMenu::Options()
                                     .withTargetComponent (this),
                                 ModalCallbackFunction::create (sizeChosen, WeakReference<AudioRouterSizeButton> (this)));
@@ -99,6 +144,10 @@ public:
         masterReference.clear();
     }
 
+    static constexpr int presetDownmix51 = 1;
+    static constexpr int presetDownmix51Sub = 2;
+
+    /** Called with ins * 100 + outs, or presetDownmix51. */
     std::function<void (int)> onAudioRouterSizeChanged;
 
     void stabilizeContent()
@@ -113,8 +162,7 @@ private:
     AudioRouterEditor& owner;
     void handleSizeResult (int r)
     {
-        // owner.setRouterSize (r, r);
-        if (r > 1 && onAudioRouterSizeChanged)
+        if (r > 0 && onAudioRouterSizeChanged)
             onAudioRouterSizeChanged (r);
         stabilizeContent();
     }
@@ -138,17 +186,13 @@ public:
 
         sizeButton.reset (new AudioRouterSizeButton (o));
         addAndMakeVisible (sizeButton.get());
-        sizeButton->onAudioRouterSizeChanged = [this] (int size) {
-            if (auto* node = owner.getNodeObjectOfType<AudioRouterNode>())
-            {
-                node->setSize (size, size);
-                if (owner.autoResize)
-                {
-                    // matrix needs to be correct before adjusting overall size
-                    owner.matrix = node->getMatrixState();
-                    owner.adjustBoundsToMatrixSize (32);
-                }
-            }
+        sizeButton->onAudioRouterSizeChanged = [this] (int code) {
+            if (code == AudioRouterSizeButton::presetDownmix51)
+                owner.applyDownmix51();
+            else if (code == AudioRouterSizeButton::presetDownmix51Sub)
+                owner.applyDownmix51 (true);
+            else
+                owner.setRouterSize (code / 100, code % 100);
         };
 
         // addAndMakeVisible (slider);
@@ -249,6 +293,44 @@ AudioRouterEditor::~AudioRouterEditor()
     if (auto* const node = getNodeObjectOfType<AudioRouterNode>())
         node->removeChangeListener (this);
     content.reset();
+}
+
+void AudioRouterEditor::setRouterSize (int ins, int outs)
+{
+    if (auto* const node = getNodeObjectOfType<AudioRouterNode>())
+    {
+        node->setSize (ins, outs);
+        if (autoResize)
+        {
+            // matrix needs to be correct before adjusting overall size
+            matrix = node->getMatrixState();
+            adjustBoundsToMatrixSize (32);
+        }
+    }
+}
+
+float AudioRouterEditor::getGainDb (int row, int col) const
+{
+    if (auto* const node = getNodeObjectOfType<AudioRouterNode>())
+        return node->getGainDb (row, col);
+    return 0.0f;
+}
+
+void AudioRouterEditor::setGainDb (int row, int col, float db)
+{
+    if (auto* const node = getNodeObjectOfType<AudioRouterNode>())
+        node->setGainDb (row, col, db);
+}
+
+void AudioRouterEditor::applyDownmix51 (bool withSub)
+{
+    if (auto* const node = getNodeObjectOfType<AudioRouterNode>())
+    {
+        node->setDownmix51ToStereo (withSub);
+        matrix = node->getMatrixState();
+        if (autoResize)
+            adjustBoundsToMatrixSize (32);
+    }
 }
 
 void AudioRouterEditor::setFadeLength (double length)

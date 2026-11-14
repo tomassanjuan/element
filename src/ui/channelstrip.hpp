@@ -1,6 +1,7 @@
 // Copyright 2023 Kushview, LLC <info@kushview.net>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include <element/ui/cliphold.hpp>
 #include <element/ui/decibelscale.hpp>
 #include <element/ui/simplemeter.hpp>
 #include <element/signals.hpp>
@@ -9,6 +10,48 @@
 #include "ui/buttons.hpp"
 
 namespace element {
+
+/** Vertical fader. Drags are relative to where they start, and holding shift
+    slows them down to 0.4x for fine adjustment. */
+class FaderSlider : public Slider
+{
+public:
+    void mouseDown (const MouseEvent& e) override
+    {
+        Slider::mouseDown (e);
+        anchor (e);
+    }
+
+    void mouseDrag (const MouseEvent& e) override
+    {
+        if (! isEnabled() || e.mods.isPopupMenu())
+            return;
+
+        const bool fine = e.mods.isShiftDown();
+        if (fine != wasFine)
+            anchor (e);
+
+        const double length = std::abs (getPositionOfValue (getMaximum()) - getPositionOfValue (getMinimum()));
+        if (length <= 0.0)
+            return;
+
+        const double speed = fine ? 0.4 : 1.0;
+        const double proportion = jlimit (0.0, 1.0, startProportion - (e.position.y - startY) / length * speed);
+        setValue (proportionOfLengthToValue (proportion));
+    }
+
+private:
+    double startProportion = 0.0;
+    float startY = 0.f;
+    bool wasFine = false;
+
+    void anchor (const MouseEvent& e)
+    {
+        startProportion = valueToProportionOfLength (getValue());
+        startY = e.position.y;
+        wasFine = e.mods.isShiftDown();
+    }
+};
 
 class ChannelStripComponent : public Component,
                               public Button::Listener,
@@ -20,6 +63,22 @@ public:
     ~ChannelStripComponent() noexcept;
 
     inline SimpleMeter& getSimpleMeter() { return meter; }
+
+    /** Strip width that gives every meter channel about 8 px: the stereo width,
+        or wider for more channels. */
+    static int widthForChannels (const int numChannels)
+    {
+        return juce::jmax ((int) stereoWidth, stereoWidth - 15 + 8 * numChannels);
+    }
+
+    /** Sets how many channels the meter shows and re-lays out the strip. */
+    inline void setMeterChannels (const int numChannels)
+    {
+        if (numChannels == meter.getPortCount())
+            return;
+        meter.setPortCount (numChannels);
+        resized();
+    }
     inline void setVolume (const double dB, NotificationType notify = sendNotificationAsync)
     {
         fader.setValue (dB, notify);
@@ -28,6 +87,36 @@ public:
     }
 
     inline double getVolume() const { return fader.getValue(); }
+
+    /** Shows the current meter level, in decibels, below the gain value.
+
+        Going over 0 dB lights the clip light, which clears 5 seconds after the
+        last clip.
+    */
+    inline void setLevelDb (float dB)
+    {
+        const int tenths = dB <= levelmeter::floorDb ? std::numeric_limits<int>::min()
+                                                     : juce::roundToInt (dB * 10.f);
+        const int bucket = dB > 0.f ? 2 : dB > -6.f ? 1 : 0;
+        if (tenths != shownTenths || bucket != shownBucket)
+        {
+            shownTenths = tenths;
+            shownBucket = bucket;
+            levelLabel.setText (levelmeter::textFor (dB), juce::dontSendNotification);
+            levelLabel.setColour (juce::Label::textColourId,
+                                  levelmeter::colourFor (dB, juce::Colours::white.withAlpha (0.8f)));
+        }
+        clip.update (dB > 0.f);
+        clipLight.setLit (clip.isClipped());
+    }
+
+    /** Clears the clip light and the meter's held peaks. */
+    inline void resetClip()
+    {
+        clip.clear();
+        clipLight.setLit (false);
+        meter.resetPeaks();
+    }
 
     inline void setPower (const bool powerOn, const bool notify = true)
     {
@@ -87,9 +176,46 @@ public:
     Signal<void()> volumeLabelDoubleClicked;
 
 private:
-    Slider fader;
+    static constexpr int stereoWidth = 100;
+    static constexpr int scaleColumnWidth = 22;
+    static constexpr int stereoLeftWidth = 38;
+    static constexpr int stereoFaderWidth = 19;
+
+    FaderSlider fader;
     SimpleMeter meter;
     DecibelScale scale;
+    Label levelLabel;
+    int shownTenths = std::numeric_limits<int>::max();
+    int shownBucket = -1;
+    juce::Rectangle<int> gainCaption, levelCaption;
+    ClipHold clip;
+
+    struct ClipLight : public Component
+    {
+        std::function<void()> onClick;
+        void setLit (bool shouldBeLit)
+        {
+            if (lit == shouldBeLit)
+                return;
+            lit = shouldBeLit;
+            repaint();
+        }
+
+        void paint (Graphics& g) override
+        {
+            g.setColour (lit ? Colours::red : Colour (0xff303030));
+            g.fillRect (getLocalBounds().reduced (1, 0));
+        }
+
+        void mouseDown (const MouseEvent&) override
+        {
+            if (onClick)
+                onClick();
+        }
+
+        bool lit = false;
+    } clipLight;
+
     struct FaderStyle;
     std::unique_ptr<FaderStyle> _fstyle;
 

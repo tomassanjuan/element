@@ -44,6 +44,7 @@ public:
         toggleChannelStrip,
         showGraphMixer,
         showConsole,
+        showPerformance,
         toggleMeterBridge,
 
         sessionClose = 0x0300,
@@ -125,6 +126,7 @@ public:
             toggleChannelStrip,
             showGraphMixer,
             showConsole,
+            showPerformance,
 
             sessionClose,
             sessionOpen,
@@ -232,6 +234,9 @@ public:
             case Commands::showConsole:
                 return "showConsole";
                 break;
+            case Commands::showPerformance:
+                return "showPerformance";
+                break;
             case Commands::panic:
                 return "panic";
                 break;
@@ -304,6 +309,8 @@ public:
             return Commands::showGraphMixer;
         if (str == "showConsole")
             return Commands::showConsole;
+        if (str == "showPerformance")
+            return Commands::showPerformance;
 
         if (str == "panic")
             return Commands::panic;

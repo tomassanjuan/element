@@ -13,6 +13,7 @@
 #include <element/ui/commands.hpp>
 #include <element/ui/commands.hpp>
 #include <element/ui/content.hpp>
+#include <element/ui/mainwindow.hpp>
 #include <element/ui/updater.hpp>
 
 #include "engine/internalformat.hpp"
@@ -337,6 +338,19 @@ void Application::systemRequestedQuit()
         // - 0 if the third button was pressed ('cancel')
         // - 1 if the first button was pressed ('yes')
         // - 2 if the middle button was pressed ('no')
+        if (sc->hasSessionChanged())
+        {
+            // The prompt must be visible: bring the window back from the tray or taskbar.
+            if (auto* gui = world->services().find<UI>())
+                if (auto* window = gui->getMainWindow())
+                {
+                    if (! window->isOnDesktop())
+                        gui->commands().invokeDirectly (Commands::toggleUserInterface, true);
+                    else if (window->isMinimised())
+                        window->setMinimised (false);
+                }
+        }
+
         const int res = ! sc->hasSessionChanged() ? 2
                                                   : AlertWindow::showYesNoCancelBox (AlertWindow::NoIcon, "Save Session", "This session may have changes. Would you like to save before exiting?");
 

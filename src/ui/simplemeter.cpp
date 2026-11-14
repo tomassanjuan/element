@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <element/ui/simplemeter.hpp>
+#include <element/ui/decibelscale.hpp>
 
 // Meter level limits (in dB).
 #define DIGITAL_METER_MAX_DB (+4.0f)
@@ -9,7 +10,6 @@
 // AES-17 dBFS calibration: the incoming value is a linear RMS amplitude, whose
 // level for a sine sits 3.01 dB below its peak. Adding this offset defines 0 dBFS
 // as a full-scale sine, so a -20 dBFS sine reads -20 dB rather than -23 dB.
-#define DIGITAL_METER_RMS_CAL_DB (+3.0103f)
 // The decay rates (magic goes here :).
 // - value decay rate (faster)
 #define DIGITAL_METER_DECAY_RATE1 (1.0f - 3E-2f)
@@ -20,6 +20,10 @@
 
 namespace element {
 using namespace juce;
+
+static SimpleMeter::ColorScheme sColorScheme = SimpleMeter::ColorScheme::Original;
+void SimpleMeter::setColorScheme (ColorScheme scheme) { sColorScheme = scheme; }
+SimpleMeter::ColorScheme SimpleMeter::getColorScheme() { return sColorScheme; }
 
 SimpleMeterValue::SimpleMeterValue (SimpleMeter* parent)
     : meter (parent),
@@ -43,6 +47,12 @@ void SimpleMeterValue::setValue (const float newValue)
 void SimpleMeterValue::resetPeak()
 {
     peak = 0;
+    clip.clear();
+}
+
+void SimpleMeterValue::mouseDown (const MouseEvent&)
+{
+    meter->resetPeaks();
 }
 
 void SimpleMeterValue::refresh()
@@ -82,7 +92,11 @@ void SimpleMeterValue::paint (Graphics& g)
 
     float dB = DIGITAL_METER_MIN_DB;
     if (value > 0.0f)
-        dB = 20.0f * log10f (value) + DIGITAL_METER_RMS_CAL_DB;
+        dB = 20.0f * log10f (value) + levelmeter::rmsCalibrationDb;
+
+    // Going over 0 dB turns the peak hold red until 5 s pass without another clip
+    // or the meter is clicked.
+    clip.update (dB > 0.0f);
 
     if (dB < DIGITAL_METER_MIN_DB)
         dB = DIGITAL_METER_MIN_DB;
@@ -110,10 +124,34 @@ void SimpleMeterValue::paint (Graphics& g)
         }
     }
 
+    const bool standard = SimpleMeter::getColorScheme() == SimpleMeter::ColorScheme::Standard;
+    const int posYellow = standard ? meter->getIECScale (-12.f) : 0;
+    const int posRed = standard ? meter->getIECScale (-3.f) : 0;
+    const auto standardColour = [posYellow, posRed] (int position) {
+        return position > posRed ? Colours::red : position > posYellow ? Colours::yellow
+                                                                        : Colours::limegreen;
+    };
+
+    if (standard)
+    {
+        // solid bands: green up to -12 dB, yellow up to -3 dB, red above
+        const auto band = [&] (int from, int to, Colour colour) {
+            to = jmin (to, level);
+            if (to <= from)
+                return;
+            g.setColour (colour);
+            vertical ? g.fillRect (0, h - to, w, to - from)
+                     : g.fillRect (from, 0, to - from, h);
+        };
+        band (0, posYellow, Colours::limegreen);
+        band (posYellow, posRed, Colours::yellow);
+        band (posRed, level, Colours::red);
+    }
+
     int ptOver = 0;
     int ptCurr = 0;
-    int colorLevel;
-    for (colorLevel = SimpleMeter::Color10dB;
+    int colorLevel = SimpleMeter::ColorOver;
+    for (colorLevel = standard ? (int) SimpleMeter::ColorOver : (int) SimpleMeter::Color10dB;
          colorLevel > SimpleMeter::ColorOver && level >= ptOver;
          colorLevel--)
     {
@@ -144,7 +182,7 @@ void SimpleMeterValue::paint (Graphics& g)
         ptOver = ptCurr;
     }
 
-    if (level > ptOver)
+    if (! standard && level > ptOver)
     {
         g.setColour (meter->color (SimpleMeter::ColorOver));
         (vertical) ? g.fillRect (0, h - level, w, level - ptOver)
@@ -158,7 +196,7 @@ void SimpleMeterValue::paint (Graphics& g)
         peakDecay = DIGITAL_METER_DECAY_RATE2;
         peakColor = colorLevel;
     }
-    else if (++peakHold > meter->getPeakFalloff())
+    else if (! clip.isClipped() && ++peakHold > meter->getPeakFalloff())
     {
         peak = int (float (peak * peakDecay));
         if (peak < level)
@@ -173,7 +211,7 @@ void SimpleMeterValue::paint (Graphics& g)
         }
     }
 
-    g.setColour (meter->color (peakColor));
+    g.setColour (clip.isClipped() ? Colours::red : standard ? standardColour (peak) : meter->color (peakColor));
     (vertical) ? g.drawLine (0, h - peak, w, h - peak)
                : g.drawLine (peak, 0, peak, h);
 }
@@ -236,7 +274,7 @@ void SimpleMeter::resized()
     }
 
     const int length = horizontal ? getWidth() : getHeight();
-    scale = 0.85f * (float) length;
+    scale = DecibelScale::lengthScale * (float) length;
 
     levels[Color0dB] = getIECScale (0.0f);
     levels[Color3dB] = getIECScale (-3.0f);
@@ -320,6 +358,25 @@ int SimpleMeter::getIECLevel (const int index) const
 }
 
 int SimpleMeter::getPortCount() const { return portCount; }
+
+void SimpleMeter::setPortCount (int numPorts)
+{
+    numPorts = jmax (1, numPorts);
+    if (numPorts == portCount)
+        return;
+
+    if (values != nullptr)
+    {
+        for (int port = 0; port < portCount; port++)
+            delete values[port];
+        delete[] values;
+        values = nullptr;
+    }
+
+    portCount = numPorts;
+    resized(); // recreates the channel meters when the component has a size
+    repaint();
+}
 void SimpleMeter::setPeakFalloff (const int newPeakFalloff) { peakFalloff = newPeakFalloff; }
 int SimpleMeter::getPeakFalloff() const { return peakFalloff; }
 

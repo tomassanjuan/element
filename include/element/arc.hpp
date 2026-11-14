@@ -26,6 +26,10 @@ public:
     /** The destination port index */
     uint32_t destPort;
 
+    /** Linear gain applied to this connection when summed into the destination.
+        Only honoured for audio ports. 1.0 is unity. */
+    float gain = 1.0f;
+
 private:
     JUCE_LEAK_DETECTOR (Arc)
 };

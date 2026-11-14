@@ -242,6 +242,16 @@ struct ChangeBusesLayout : public AppMessage
     std::function<void()> onFinished;
 };
 
+/** Send this to change the level (dB) of an audio connection. */
+struct ChangeConnectionGainMessage : public AppMessage
+{
+    ChangeConnectionGainMessage (const Node& g, uint32_t s, uint32_t sp, uint32_t d, uint32_t dp, float level)
+        : graph (g), sourceNode (s), sourcePort (sp), destNode (d), destPort (dp), db (level) {}
+    const Node graph;
+    const uint32_t sourceNode, sourcePort, destNode, destPort;
+    const float db;
+};
+
 struct OpenSessionMessage : public AppMessage
 {
     OpenSessionMessage (const File& f) : file (f) {}

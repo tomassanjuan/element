@@ -30,6 +30,20 @@ public:
     int meterSize() const;
     void setMeterSize (int);
 
+    /** Draw the meters like the channel strip VU meters instead of segments. */
+    void setVuStyle (bool);
+
+    /** What the VU style bridge meters measure. */
+    enum class LevelMode { Peak = 0,
+                           RMS = 1 };
+
+    /** Sets the level mode of every bridge, see Settings::getBridgeLevelMode(). */
+    static void setLevelMode (LevelMode);
+    static LevelMode getLevelMode();
+
+    /** Width needed to show all currently visible meters. */
+    int preferredWidth() const;
+
     /** @internal */
     void resized() override;
     /** @internal */
@@ -53,6 +67,9 @@ public:
     void resized() override;
     void mouseDown (const juce::MouseEvent&) override;
     MeterBridge& meterBridge();
+
+    /** Called after the user changes the bridge's visibility or size. */
+    std::function<void()> onConfigChanged;
 
 private:
     std::unique_ptr<MeterBridge> bridge;

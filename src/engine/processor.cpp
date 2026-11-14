@@ -229,10 +229,24 @@ void Processor::setInputRMS (int chan, float rms, int numSamples)
         updateRMSMeter (*inRMS.getUnchecked (chan), rms, numSamples);
 }
 
-void Processor::setOutputRMS (int chan, float rms, int numSamples)
+void Processor::setOutputRMS (int chan, float rms, int numSamples, float blockPeak)
 {
-    if (chan < outRMS.size())
-        updateRMSMeter (*outRMS.getUnchecked (chan), rms, numSamples);
+    if (chan >= outRMS.size())
+        return;
+
+    auto& meter = *outRMS.getUnchecked (chan);
+    updateRMSMeter (meter, rms, numSamples);
+
+    static constexpr double peakFallSeconds = 0.25;
+    const double fs = sampleRate > 0.0 ? sampleRate : 44100.0;
+    if (numSamples != peakDecayBlock || fs != peakDecayRate)
+    {
+        peakDecayBlock = numSamples;
+        peakDecayRate = fs;
+        peakDecay = (float) std::exp (-(double) numSamples / (peakFallSeconds * fs));
+    }
+    const float decayed = meter.peak.get() * peakDecay;
+    meter.peak.set (std::max (blockPeak, decayed));
 }
 
 bool Processor::isSuspended() const

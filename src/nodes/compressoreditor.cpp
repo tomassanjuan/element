@@ -69,7 +69,8 @@ void CompressorNodeEditor::CompViz::updateInGainDB (float inDB)
 
 void CompressorNodeEditor::CompViz::timerCallback()
 {
-    repaint();
+    if (isShowing())
+        repaint();
 }
 
 void CompressorNodeEditor::CompViz::paint (Graphics& g)

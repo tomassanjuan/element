@@ -98,6 +98,9 @@ public:
     /** Add a connection on a specific graph */
     void addConnection (const uint32 s, const uint32 sp, const uint32 d, const uint32 dp, const Node& graph);
 
+    /** Sets the level (dB) of an audio connection in the given graph. */
+    void setConnectionGain (const uint32 s, const uint32 sp, const uint32 d, const uint32 dp, const float db, const Node& graph);
+
     void connectChannels (const Node& graph, const Node& src, const int sc, const Node& dst, const int dc);
 
     void connectChannels (const Node& graph, const uint32 s, const int sc, const uint32 d, const int dc);
@@ -132,6 +135,18 @@ public:
 
     /** called when the session loads or re-loads */
     void sessionReloaded();
+
+    /** Whether a root graph currently has its nodes loaded in the engine.
+
+        @param graph the root graph to check
+        @return false if the graph is unloaded; true for loaded graphs and
+                for nodes that aren't root graphs
+    */
+    bool isGraphLoaded (const Node& graph) const;
+
+    /** Unloads every loaded, inactive graph that the unload settings say
+        should not stay loaded. Call after those settings change. */
+    void applyGraphUnloadPolicy();
 
     /** replace a node with a given plugin */
     void replace (const Node&, const juce::PluginDescription&);

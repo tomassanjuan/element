@@ -4,6 +4,8 @@
 #include <element/context.hpp>
 #include <element/devices.hpp>
 #include <element/settings.hpp>
+#include <element/ui/meterbridge.hpp>
+#include <element/ui/simplemeter.hpp>
 
 #include "appinfo.hpp"
 #include "engine/midiengine.hpp"
@@ -33,8 +35,13 @@ const char* Settings::oscHostPortKey = "oscHostPortKey";
 const char* Settings::oscHostEnabledKey = "oscHostEnabledKey";
 const char* Settings::systrayKey = "systrayKey";
 const char* Settings::startHiddenKey = "startHidden";
+const char* Settings::closeToTrayKey = "closeToTray";
+const char* Settings::unloadInactiveGraphsKey = "unloadInactiveGraphs";
+const char* Settings::cableLevelColorsKey = "cableLevelColors";
 const char* Settings::midiOutLatencyKey = "midiOutLatency";
 const char* Settings::desktopScaleKey = "desktopScale";
+const char* Settings::meterColorSchemeKey = "meterColorScheme";
+const char* Settings::bridgeLevelModeKey = "bridgeLevelMode";
 const char* Settings::mainContentTypeKey = "mainContentType";
 const char* Settings::pluginListHeaderKey = "pluginListHeader";
 const char* Settings::devicesKey = "devices";
@@ -243,9 +250,18 @@ bool Settings::isSystrayEnabled() const
 }
 
 void Settings::setSystrayEnabled (bool enabled) { set (systrayKey, enabled); }
+bool Settings::unloadInactiveGraphs() const { return getBool (unloadInactiveGraphsKey, false); }
+void Settings::setUnloadInactiveGraphs (bool unload) { set (unloadInactiveGraphsKey, unload); }
 
-bool Settings::isStartHiddenEnabled() const { return getBool (startHiddenKey, false); }
-void Settings::setStartHiddenEnabled (bool enabled) { set (startHiddenKey, enabled); }
+bool Settings::isCloseToTrayEnabled() const { return getBool (closeToTrayKey, true); }
+void Settings::setCloseToTrayEnabled (bool enabled) { set (closeToTrayKey, enabled); }
+
+// legacy value was a bool: true meant "always"
+int Settings::getStartHiddenMode() const { return jlimit (0, 2, getInt (startHiddenKey, 0)); }
+void Settings::setStartHiddenMode (int mode) { set (startHiddenKey, jlimit (0, 2, mode)); }
+
+bool Settings::isCableLevelColorsEnabled() const { return getBool (cableLevelColorsKey, true); }
+void Settings::setCableLevelColorsEnabled (bool enabled) { set (cableLevelColorsKey, enabled); }
 
 //=============================================================================
 double Settings::getMidiOutLatency() const { return getDouble (midiOutLatencyKey, 0.0); }
@@ -255,6 +271,26 @@ double Settings::getDesktopScale() const { return getDouble (desktopScaleKey, 1.
 void Settings::setDesktopScale (double scale) { set (desktopScaleKey, jlimit (0.1, 8.0, scale)); }
 
 //=============================================================================
+int Settings::getMeterColorScheme() const { return getInt (meterColorSchemeKey, 0); }
+void Settings::setMeterColorScheme (int scheme)
+{
+    set (meterColorSchemeKey, jlimit (0, 1, scheme));
+    applyMeterSettings();
+}
+
+int Settings::getBridgeLevelMode() const { return getInt (bridgeLevelModeKey, 0); }
+void Settings::setBridgeLevelMode (int mode)
+{
+    set (bridgeLevelModeKey, jlimit (0, 1, mode));
+    applyMeterSettings();
+}
+
+void Settings::applyMeterSettings() const
+{
+    SimpleMeter::setColorScheme (static_cast<SimpleMeter::ColorScheme> (getMeterColorScheme()));
+    MeterBridge::setLevelMode (static_cast<MeterBridge::LevelMode> (getBridgeLevelMode()));
+}
+
 String Settings::getMainContentType() const { return "standard"; }
 void Settings::setMainContentType (const String& tp) { ignoreUnused (tp); }
 
@@ -431,7 +467,9 @@ void Settings::addItemsToMenu (Context& world, PopupMenu& menu)
         index = 0;
         sub.clear();
         for (const auto bufSize : device->getAvailableBufferSizes())
-            sub.addItem (BufferSize + index++, String (bufSize), true, bufSize == device->getCurrentBufferSizeSamples());
+            sub.addItem (BufferSize + index++,
+                         String (bufSize) + " (" + String (bufSize * 1000.0 / device->getCurrentSampleRate(), 1) + " ms)",
+                         true, bufSize == device->getCurrentBufferSizeSamples());
         menu.addSubMenu ("Buffer Size", sub);
     }
 }

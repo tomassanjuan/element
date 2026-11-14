@@ -7,10 +7,13 @@
 #include <element/devices.hpp>
 #include <element/plugins.hpp>
 #include <element/settings.hpp>
+#include <element/engine.hpp>
 #include <element/ui.hpp>
 #include <element/ui/content.hpp>
 #include <element/ui/mainwindow.hpp>
+#include <element/ui/meterbridge.hpp>
 #include <element/ui/preferences.hpp>
+#include <element/ui/simplemeter.hpp>
 #include <element/ui/updater.hpp>
 #include <element/version.hpp>
 
@@ -130,6 +133,32 @@ public:
 
     Label label;
     SettingButton button;
+};
+
+class ChoiceSettingRow
+{
+public:
+    /** Adds the label and combo box to the parent and wires the change callback.
+
+        @param parent         The page that owns this row.
+        @param text           The label text.
+        @param items          The choices, in order.
+        @param selectedIndex  The initially selected choice.
+        @param onChange       Called with the chosen index after the user picks a choice.
+    */
+    void init (Component& parent, const String& text, const StringArray& items, int selectedIndex, std::function<void (int)> onChange)
+    {
+        parent.addAndMakeVisible (label);
+        label.setText (text, dontSendNotification);
+        label.setFont (Font (FontOptions (12.0, Font::bold)));
+        parent.addAndMakeVisible (box);
+        box.addItemList (items, 1);
+        box.setSelectedId (selectedIndex + 1, dontSendNotification);
+        box.onChange = [this, onChange = std::move (onChange)]() { onChange (box.getSelectedId() - 1); };
+    }
+
+    Label label;
+    ComboBox box;
 };
 
 //==============================================================================
@@ -353,6 +382,7 @@ private:
 //==============================================================================
 class GeneralSettingsPage : public SettingsPage,
                             public Value::Listener,
+                            public ChangeListener,
                             public FilenameComponentListener
 {
 public:
@@ -420,15 +450,32 @@ public:
         });
         systray.init (*this, "Show system tray", settings.isSystrayEnabled(), [this]() {
             settings.setSystrayEnabled (systray.get());
-            startHidden.setEnabled (systray.get());
+            startHidden.box.setEnabled (systray.get());
+            closeToTray.setEnabled (systray.get());
             gui.refreshSystemTray();
             settingChanged();
         });
-        startHidden.init (*this, "Start hidden in system tray", settings.isStartHiddenEnabled(), [this]() {
-            settings.setStartHiddenEnabled (startHidden.get());
+        closeToTray.init (*this, "Close to system tray", settings.isCloseToTrayEnabled(), [this]() {
+            settings.setCloseToTrayEnabled (closeToTray.get());
             settingChanged();
         });
-        startHidden.setEnabled (systray.get());
+        closeToTray.setEnabled (systray.get());
+        unloadInactiveGraphs.init (*this, "Unload inactive graphs", settings.unloadInactiveGraphs(), [this]() {
+            settings.setUnloadInactiveGraphs (unloadInactiveGraphs.get());
+            if (auto* engine = gui.sibling<EngineService>())
+                engine->applyGraphUnloadPolicy();
+            gui.nodeSelected();
+            settingChanged();
+        });
+        startHidden.init (*this, "Start hidden in system tray", { "Off", "Always", "Remember" }, settings.getStartHiddenMode(), [this] (int mode) {
+            settings.setStartHiddenMode (mode);
+            settingChanged();
+        });
+        startHidden.box.setEnabled (systray.get());
+        cableColors.init (*this, "Color graph cables by signal level", settings.isCableLevelColorsEnabled(), [this]() {
+            settings.setCableLevelColorsEnabled (cableColors.get());
+            settingChanged();
+        });
 
         addAndMakeVisible (desktopScaleLabel);
         desktopScaleLabel.setText ("Desktop scale", dontSendNotification);
@@ -451,6 +498,15 @@ public:
                     parent->updateSize();
             }
         };
+
+        meterColors.init (*this, "Meter colors", { "Original", "Standard (-6 dB green, 0 yellow, over red)" }, settings.getMeterColorScheme(), [this] (int scheme) {
+            settings.setMeterColorScheme (scheme);
+            settingChanged();
+        });
+        bridgeMode.init (*this, "Meter bridge level", { "Peak (PK)", "RMS (matches the channel strips)" }, settings.getBridgeLevelMode(), [this] (int mode) {
+            settings.setBridgeLevelMode (mode);
+            settingChanged();
+        });
 
         addAndMakeVisible (defaultSessionFileLabel);
         defaultSessionFileLabel.setText ("Default new Session", dontSendNotification);
@@ -483,10 +539,12 @@ public:
         jassert (settings.getMainContentType() == "standard");
         mainContentBox.setSelectedId (1, dontSendNotification);
         mainContentBox.getSelectedIdAsValue().addListener (this);
+        settings.addChangeListener (this);
     }
 
     virtual ~GeneralSettingsPage() noexcept
     {
+        settings.removeChangeListener (this);
         clockSource.removeListener (this);
         mainContentBox.getSelectedIdAsValue().removeListener (this);
     }
@@ -523,8 +581,14 @@ public:
         layoutSetting (r, askToSaveSession);
         layoutSetting (r, mainContentLabel, mainContentBox, comboWidth);
         layoutSetting (r, systray);
-        layoutSetting (r, startHidden);
+        layoutSetting (r, closeToTray);
+        layoutSetting (r, unloadInactiveGraphs);
+        layoutSetting (r, startHidden.label, startHidden.box, comboWidth);
+        layoutSetting (r, cableColors);
         layoutSetting (r, desktopScaleLabel, desktopScale, getWidth() / 4);
+
+        layoutSetting (r, meterColors.label, meterColors.box, comboWidth);
+        layoutSetting (r, bridgeMode.label, bridgeMode.box, comboWidth);
 
 #if ! ELEMENT_SE
         layoutSetting (r, defaultSessionFileLabel, defaultSessionFile, 190 - settingHeight);
@@ -539,6 +603,11 @@ public:
             r.removeFromTop (spacingBetweenSections * 2);
             pluginSettings.setBounds (r);
         }
+    }
+
+    void changeListenerCallback (juce::ChangeBroadcaster*) override
+    {
+        desktopScale.setValue (settings.getDesktopScale(), dontSendNotification);
     }
 
     void valueChanged (Value& value) override
@@ -585,13 +654,19 @@ private:
     TextButton defaultSessionClearButton;
 
     BoolSettingRow systray;
-    BoolSettingRow startHidden;
+    BoolSettingRow closeToTray;
+    BoolSettingRow unloadInactiveGraphs;
+    ChoiceSettingRow startHidden;
+    BoolSettingRow cableColors;
 
     Label desktopScaleLabel;
     Slider desktopScale;
 
     Label mainContentLabel;
     ComboBox mainContentBox;
+
+    ChoiceSettingRow meterColors;
+    ChoiceSettingRow bridgeMode;
 
     Settings& settings;
     AudioEnginePtr engine;
@@ -618,6 +693,20 @@ public:
         addAndMakeVisible (devs);
         devs.setItemHeight (22);
 
+        addAndMakeVisible (presetLabel);
+        presetLabel.setText ("Audio preset", dontSendNotification);
+        presetLabel.setFont (Font (FontOptions (12.0, Font::bold)));
+        addAndMakeVisible (presetBox);
+        presetBox.setTextWhenNothingSelected ("(none)");
+        presetBox.onChange = [this]() { loadPreset (presetBox.getText()); };
+        addAndMakeVisible (presetSave);
+        presetSave.setButtonText ("Save...");
+        presetSave.onClick = [this]() { askToSavePreset(); };
+        addAndMakeVisible (presetDelete);
+        presetDelete.setButtonText ("Delete");
+        presetDelete.onClick = [this]() { deletePreset (presetBox.getText()); };
+        refreshPresets();
+
         addAndMakeVisible (experimentalLabel);
         experimentalLabel.setText ("Experimental");
         addAndMakeVisible (multithreadingLabel);
@@ -636,6 +725,13 @@ public:
     void resized() override
     {
         Rectangle<int> r (getLocalBounds());
+        auto bar = r.removeFromTop (presetBarHeight).reduced (4, 4);
+        presetDelete.setBounds (bar.removeFromRight (60));
+        bar.removeFromRight (4);
+        presetSave.setBounds (bar.removeFromRight (70));
+        bar.removeFromRight (4);
+        presetLabel.setBounds (bar.removeFromLeft (90));
+        presetBox.setBounds (bar);
         devs.setBounds (r.removeFromTop (devs.getHeight()));
 
         // this will cause the experimental settings to position correctly
@@ -658,10 +754,86 @@ private:
     juce::AudioDeviceSelectorComponent devs;
     [[maybe_unused]] DeviceManager& devices;
 
+    static constexpr int presetBarHeight = 34;
+    static inline const String presetPrefix { "audioPreset_" };
+    Label presetLabel;
+    ComboBox presetBox;
+    TextButton presetSave, presetDelete;
+
+    void refreshPresets (const String& select = {})
+    {
+        presetBox.clear (dontSendNotification);
+        auto* props = settings.getUserSettings();
+        StringArray names;
+        for (auto& key : props->getAllProperties().getAllKeys())
+            if (key.startsWith (presetPrefix))
+                names.add (key.substring (presetPrefix.length()));
+        names.sortNatural();
+        for (int i = 0; i < names.size(); ++i)
+            presetBox.addItem (names[i], i + 1);
+        presetBox.setText (select, dontSendNotification);
+        presetDelete.setEnabled (names.contains (select));
+    }
+
+    void savePreset (const String& name)
+    {
+        if (name.isEmpty())
+            return;
+        if (auto xml = devices.createStateXml())
+        {
+            settings.getUserSettings()->setValue (presetPrefix + name, xml.get());
+            settings.saveIfNeeded();
+        }
+        refreshPresets (name);
+    }
+
+    void loadPreset (const String& name)
+    {
+        presetDelete.setEnabled (name.isNotEmpty());
+        auto xml = settings.getUserSettings()->getXmlValue (presetPrefix + name);
+        if (xml == nullptr)
+            return;
+        const auto error = devices.initialise (DeviceManager::maxAudioChannels,
+                                               DeviceManager::maxAudioChannels,
+                                               xml.get(),
+                                               false,
+                                               "*",
+                                               nullptr);
+        if (error.isNotEmpty())
+            AlertWindow::showMessageBoxAsync (MessageBoxIconType::WarningIcon,
+                                              "Audio preset",
+                                              "Could not apply \"" + name + "\": " + error);
+    }
+
+    void deletePreset (const String& name)
+    {
+        if (name.isEmpty())
+            return;
+        settings.getUserSettings()->removeValue (presetPrefix + name);
+        settings.saveIfNeeded();
+        refreshPresets();
+    }
+
+    void askToSavePreset()
+    {
+        auto* w = new AlertWindow ("Save audio preset",
+                                   "Saves the current audio device, rates and channels under a name.",
+                                   MessageBoxIconType::NoIcon);
+        w->addTextEditor ("name", presetBox.getText());
+        w->addButton ("Save", 1, KeyPress (KeyPress::returnKey));
+        w->addButton ("Cancel", 0, KeyPress (KeyPress::escapeKey));
+        w->enterModalState (true,
+                            ModalCallbackFunction::create ([safe = SafePointer<AudioSettingsComponent> (this), w] (int result) {
+                                if (result == 1 && safe != nullptr)
+                                    safe->savePreset (w->getTextEditorContents ("name").trim());
+                            }),
+                            true);
+    }
+
     void layoutExperimentalSettings()
     {
         Rectangle<int> r (getLocalBounds());
-        r.removeFromTop (devs.getHeight());
+        r.removeFromTop (presetBarHeight + devs.getHeight());
 
         experimentalLabel.setBounds (r.removeFromTop (60));
         auto inner = experimentalLabel.getBounds().reduced (10).withTrimmedTop (10);
@@ -872,7 +1044,7 @@ public:
             midi.setDefaultMidiOutput (dev);
     }
 
-    void changeListenerCallback (ChangeBroadcaster*) override
+    void changeListenerCallback (juce::ChangeBroadcaster*) override
     {
         updateDevices();
         for (int i = 0; i < DocumentWindow::getNumTopLevelWindows(); ++i)
@@ -1462,7 +1634,7 @@ void Preferences::setPage (const String& name)
 
 void Preferences::updateSize()
 {
-    setSize (600, 500);
+    setSize (600, 540);
 }
 
 } /* namespace element */

@@ -17,7 +17,12 @@ class PluginsPanelView;
 class DataPathTreeComponent;
 class SessionTreePanel;
 
-class NavigationConcertinaPanel : public juce::ConcertinaPanel {
+/** The navigation sidebar: a vertical stack of collapsible panels.
+
+    Any number of panels can be open at once. Clicking a header opens or closes
+    its panel, dragging the divider between two open panels resizes only those
+    two, and dragging a header reorders the panels. */
+class NavigationConcertinaPanel : public juce::Component {
 public:
     NavigationConcertinaPanel (Context& g);
     ~NavigationConcertinaPanel();
@@ -32,6 +37,9 @@ public:
     void hidePanel (const juce::String& name);
     void setPanelName (const juce::String& panel, const juce::String& newName);
 
+    int getNumPanels() const noexcept { return (int) entries.size(); }
+    juce::Component* getPanel (int index) const noexcept;
+
     template <class T>
     inline T* findPanel()
     {
@@ -40,6 +48,16 @@ public:
                 return panel;
         return nullptr;
     }
+
+    /** Sets the content height of a panel; 0 collapses it to its header.
+        The panels share the available height, so the final size can differ. */
+    void setPanelSize (juce::Component* panel, int height, bool animate = false);
+
+    /** Opens a panel, leaving the other panels as they are. */
+    void expandPanel (juce::Component* panel);
+
+    /** Opens the panel if it is collapsed, collapses it otherwise. */
+    void togglePanel (juce::Component* panel);
 
     /** Describes a navigation panel registered with the concertina. Every panel,
         including the built-ins, is created from one of these. */
@@ -56,9 +74,6 @@ public:
 
     /** Builds a custom header for a panel. Return nullptr to use the default header. */
     using PanelHeaderFactory = std::function<juce::Component*(juce::Component& panel)>;
-
-    using juce::ConcertinaPanel::addPanel;
-    using juce::ConcertinaPanel::removePanel;
 
     /** Register a navigation panel.
 
@@ -88,6 +103,8 @@ public:
     void setHeaderHeight (const int newHeight);
 
     void paint (juce::Graphics& g) override;
+    void paintOverChildren (juce::Graphics& g) override;
+    void resized() override;
 
 private:
     Context& globals;
@@ -95,7 +112,25 @@ private:
     int defaultPanelHeight;
 
     juce::StringArray names;
-    juce::OwnedArray<juce::Component> comps;
+
+    class Sash;
+    struct Entry {
+        std::unique_ptr<juce::Component> panel;
+        std::unique_ptr<juce::Component> header;
+        std::unique_ptr<Sash> sash;
+        int size { 0 };     // content height in px, 0 when collapsed
+        int lastSize { 0 }; // height to restore when opened again
+    };
+    std::vector<std::unique_ptr<Entry>> entries;
+    int dropIndex { -1 }; // insert position shown while a header is dragged
+
+    int indexOfEntry (const juce::Component* panel) const noexcept;
+    void layoutPanels();
+    void resizeAround (int upper, int lower, int delta, int startUpper, int startLower);
+    int nextOpenAfter (int index) const noexcept;
+    void headerDragged (juce::Component* panel, int yInThis);
+    void headerDropped (juce::Component* panel);
+    void syncRegisteredOrder();
     void addPanelInternal (const int index,
                            juce::Component* comp,
                            const juce::String& name = juce::String(),

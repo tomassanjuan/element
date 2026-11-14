@@ -441,6 +441,8 @@ ValueTree Node::makeArc (const Arc& arc)
     model.setProperty (tags::sourcePort, (int) arc.sourcePort, nullptr);
     model.setProperty (tags::destNode, (int) arc.destNode, nullptr);
     model.setProperty (tags::destPort, (int) arc.destPort, nullptr);
+    if (arc.gain != 1.0f)
+        model.setProperty (tags::gain, juce::Decibels::gainToDecibels (arc.gain, -100.0f), nullptr);
     return model;
 }
 
@@ -653,6 +655,7 @@ Arc Node::arcFromValueTree (const ValueTree& data)
              (uint32) (int) data.getProperty (tags::sourcePort, (int) EL_INVALID_PORT),
              (uint32) (int) data.getProperty (tags::destNode, (int) EL_INVALID_NODE),
              (uint32) (int) data.getProperty (tags::destPort, (int) EL_INVALID_PORT));
+    arc.gain = juce::Decibels::decibelsToGain ((float) (double) data.getProperty (tags::gain, 0.0), -100.0f);
     return arc;
 }
 

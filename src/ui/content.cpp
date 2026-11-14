@@ -10,6 +10,7 @@
 #include <element/ui.hpp>
 #include <element/ui/commands.hpp>
 #include <element/ui/content.hpp>
+#include <element/ui/decibelscale.hpp>
 #include <element/ui/preferences.hpp>
 #include <element/ui/style.hpp>
 
@@ -79,6 +80,16 @@ public:
         pluginMenu.onClick = [this]() { runPluginMenu(); };
         if (owner.services().getRunMode() == RunMode::Plugin)
             addAndMakeVisible (pluginMenu);
+
+        audioButton.setButtonText (TRANS ("audio"));
+        audioButton.setColour (SettingButton::backgroundColourId, Colors::toggleRed);
+        audioButton.setColour (SettingButton::backgroundOnColourId, Colors::toggleGreen);
+        audioButton.addListener (this);
+        addAndMakeVisible (audioButton);
+        if (owner.services().getRunMode() == RunMode::Plugin)
+            audioButton.setVisible (false);
+        else
+            updateAudioButton();
 
         addAndMakeVisible (midiBlinker);
     }
@@ -183,6 +194,13 @@ public:
                                        .withSizeKeepingCentre (tempoBarHeight * 2, tempoBarHeight));
         }
 
+        if (audioButton.isVisible())
+        {
+            r.removeFromRight (4);
+            audioButton.setBounds (r.removeFromRight (tempoBarHeight * 2)
+                                       .withSizeKeepingCentre (tempoBarHeight * 2, tempoBarHeight));
+        }
+
         if (transport.isVisible())
         {
             r = getLocalBounds().withX ((getWidth() / 2) - (transport.getWidth() / 2));
@@ -207,10 +225,25 @@ public:
         {
             ViewHelpers::invokeDirectly (this, Commands::toggleMidiLearn, true);
         }
+        else if (btn == &audioButton)
+        {
+            if (owner.context().devices().getCurrentAudioDevice() != nullptr)
+            {
+                if (auto* const service = owner.services().find<DeviceService>())
+                    service->stopAudio();
+            }
+            else
+            {
+                startAudioDevice();
+            }
+            updateAudioButton();
+        }
     }
 
     void timerCallback() override
     {
+        updateAudioButton();
+
         // Keep the button in sync with the learn state no matter how it was
         // toggled (header button, keyboard shortcut, or menu).
         if (auto* mapping = owner.services().find<MappingService>())
@@ -224,11 +257,45 @@ private:
     MappingService* mappingService = nullptr;
     SettingButton viewBtn;
     SettingButton learnButton;
+    SettingButton audioButton;
     TempoAndMeterBar tempoBar;
     TransportBar transport;
     IconButton pluginMenu;
     MidiBlinker midiBlinker;
     Array<SignalConnection> connections;
+
+    void startAudioDevice()
+    {
+        auto* const service = owner.services().find<DeviceService>();
+        if (service == nullptr)
+            return;
+
+        const auto error = service->startAudio();
+        updateAudioButton();
+        if (error.isEmpty())
+            return;
+
+        auto options = MessageBoxOptions()
+                           .withIconType (MessageBoxIconType::WarningIcon)
+                           .withTitle (TRANS ("Audio device unavailable"))
+                           .withMessage (error)
+                           .withButton (TRANS ("Retry"), 1)
+                           .withButton (TRANS ("Cancel"), 0);
+        AlertWindow::showAsync (options, [safe = SafePointer<Toolbar> (this)] (int result) {
+            if (result == 1 && safe != nullptr)
+                safe->startAudioDevice();
+        });
+    }
+
+    void updateAudioButton()
+    {
+        const bool running = owner.context().devices().getCurrentAudioDevice() != nullptr;
+        auto* const service = owner.services().find<DeviceService>();
+        audioButton.setToggleState (running, dontSendNotification);
+        audioButton.setEnabled (running || (service != nullptr && service->canStartAudio()));
+        audioButton.setTooltip (running ? TRANS ("Stop the audio engine and release the audio device")
+                                        : TRANS ("Start the audio engine"));
+    }
 
     void runPluginMenu()
     {
@@ -293,7 +360,7 @@ public:
             }
         }
 
-        startTimer (2000);
+        startTimer (1000);
         updateLabels();
     }
 
@@ -341,17 +408,31 @@ public:
 
         if (auto* dev = devices.getCurrentAudioDevice())
         {
-            String text = "Sample Rate: ";
-            text << String (dev->getCurrentSampleRate() * 0.001, 1) << " KHz";
-            text << ":  Buffer: " << dev->getCurrentBufferSizeSamples();
+            const auto rate = dev->getCurrentSampleRate();
+            const auto buffer = dev->getCurrentBufferSizeSamples();
+            const auto kHz = rate * 0.001;
+            String text = String (kHz, std::abs (kHz - std::round (kHz)) < 0.001 ? 0 : 1);
+            text << " kHz, buffer " << buffer << " (" << String (buffer * 1000.0 / jmax (1.0, rate), 1) << " ms)";
             sampleRateLabel.setText (text, dontSendNotification);
 
             text.clear();
             String strText = streamingStatus.getValue().toString();
             if (strText.isEmpty())
                 strText = "Running";
-            text << "Engine: " << strText << ":  CPU: " << String (devices.getCpuUsage() * 100.f, 1) << "%";
+            const auto cpu = devices.getCpuUsage() * 100.f;
+            const auto drops = devices.getXRunCount();
+            text << "Engine: " << strText << ", CPU " << String (cpu, 1) << "%, drops " << drops;
+            if (engine != nullptr)
+            {
+                const int threads = engine->getNumRenderThreads();
+                text << ", multithreading " << (threads > 0 ? "on (" + String (threads) + " threads)" : "off");
+            }
             streamingStatusLabel.setText (text, dontSendNotification);
+            // red above 90 % CPU, amber above 70 % or after any drop
+            streamingStatusLabel.setColour (Label::textColourId,
+                                            cpu > 90.f ? levelmeter::overColour
+                                            : (cpu > 70.f || drops > 0) ? levelmeter::warnColour
+                                                                        : Colour (Colors::textColor));
 
             statusLabel.setText (String ("Device: ") + dev->getName(), dontSendNotification);
             statusLabel.setColour (Label::textColourId, Colors::textColor);
@@ -415,6 +496,9 @@ private:
     friend class Timer;
     void timerCallback() override
     {
+        if (! isShowing())
+            return;
+
         updateLabels();
     }
 };

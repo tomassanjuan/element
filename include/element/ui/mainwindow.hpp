@@ -19,7 +19,6 @@ public:
     MainWindow (Context&);
     virtual ~MainWindow();
     virtual void closeButtonPressed() override;
-    void minimiseButtonPressed() override;
 
     void refreshMenu();
     Context& context() { return world; }

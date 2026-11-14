@@ -119,17 +119,13 @@ void MainWindow::nameChangedSession()
 
 void MainWindow::closeButtonPressed()
 {
-    JUCEApplication* app (JUCEApplication::getInstance());
-    app->systemRequestedQuit();
-}
+    if (world.settings().isSystrayEnabled() && world.settings().isCloseToTrayEnabled())
+    {
+        world.services().find<GuiService>()->commands().invokeDirectly (Commands::toggleUserInterface, true);
+        return;
+    }
 
-void MainWindow::minimiseButtonPressed()
-{
-    auto& gui = *world.services().find<GuiService>();
-    if (world.settings().isSystrayEnabled())
-        gui.commands().invokeDirectly (Commands::toggleUserInterface, true);
-    else
-        DocumentWindow::minimiseButtonPressed();
+    JUCEApplication::getInstance()->systemRequestedQuit();
 }
 
 void MainWindow::activeWindowStatusChanged()

@@ -77,6 +77,9 @@ public:
 
     bool addConnection (uint32 sourceFilterUID, int sourceFilterChannel, uint32 destFilterUID, int destFilterChannel);
 
+    /** Sets the gain (dB) of an existing audio connection and rebuilds the arcs model. */
+    bool setConnectionGain (uint32 sourceNode, uint32 sourcePort, uint32 destNode, uint32 destPort, float db);
+
     void removeConnection (const int index);
 
     void removeConnection (uint32 sourceNode, uint32 sourcePort, uint32 destNode, uint32 destPort);
@@ -84,6 +87,10 @@ public:
     void removeIllegalConnections();
 
     void clear();
+
+    /** Saves plugin states and releases all processors, keeping the node model intact.
+        Call setNodeModel() to load the graph again. */
+    void unload();
 
     void setNodeModel (const Node& node);
     inline Node getGraphModel() const { return Node (graph, false); }
@@ -93,17 +100,24 @@ public:
     /** Rebuilds the arcs model according to the GraphNode */
     inline void syncArcsModel()
     {
+        if (unloaded)
+            return;
         processor.removeIllegalConnections();
         processorArcsChanged();
     }
 
     inline bool isLoaded() const { return loaded; }
 
+    /** True between unload() and the next setNodeModel(). The processor is
+        empty then, so the arcs model must not be rebuilt from it. */
+    inline bool isUnloaded() const { return unloaded; }
+
 private:
     PluginManager& pluginManager;
     GraphNode& processor;
     ValueTree graph, arcs, nodes;
     bool loaded = false;
+    bool unloaded = false;
 
     uint32 lastUID;
 

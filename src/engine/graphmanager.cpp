@@ -13,7 +13,6 @@
 #include "nodes/placeholder.hpp"
 #include "engine/rootgraph.hpp"
 
-#include "tracer.hpp"
 #include "utils.hpp"
 
 namespace element {
@@ -181,6 +180,9 @@ private:
 
     void onPortsChanged()
     {
+        if (manager.isUnloaded())
+            return;
+
         const auto newPorts = object->createPortsData();
         int index = data.indexOf (data.getChildWithName (tags::ports));
         if (newPorts.isValid())
@@ -342,7 +344,6 @@ bool GraphManager::contains (const uint32 nodeId) const
 
 Processor* GraphManager::createFilter (const PluginDescription* desc, double x, double y, uint32 nodeId)
 {
-    EL_LOAD_TRACE (String ("createFilter: ") + desc->name);
     String errorMessage;
     auto node = std::unique_ptr<Processor> (
         pluginManager.createGraphNode (*desc, errorMessage));
@@ -635,6 +636,15 @@ bool GraphManager::addConnection (uint32 sourceFilterUID, int sourcePort, uint32
     return result;
 }
 
+bool GraphManager::setConnectionGain (uint32 sourceNode, uint32 sourcePort, uint32 destNode, uint32 destPort, float db)
+{
+    const auto gain = juce::Decibels::decibelsToGain (juce::jlimit (-100.0f, 24.0f, db), -100.0f);
+    const bool result = processor.setConnectionGain (sourceNode, sourcePort, destNode, destPort, gain);
+    if (result)
+        processorArcsChanged();
+    return result;
+}
+
 void GraphManager::removeConnection (const int index)
 {
     processor.removeConnection (index);
@@ -649,8 +659,8 @@ void GraphManager::removeConnection (uint32 sourceNode, uint32 sourcePort, uint3
 
 void GraphManager::setNodeModel (const Node& node)
 {
-    EL_LOAD_TRACE (String ("setNodeModel: ") + node.getName());
     loaded = false;
+    unloaded = false;
 
     processor.clear();
     graph = node.data();
@@ -716,7 +726,7 @@ void GraphManager::setNodeModel (const Node& node)
             DBG("connection " << src->getName() << " to " << dst->getName());
         }
 #endif
-        bool worked = processor.addConnection (sourceNode, (uint32) (int) arc.getProperty (tags::sourcePort), destNode, (uint32) (int) arc.getProperty (tags::destPort));
+        bool worked = processor.addConnection (sourceNode, (uint32) (int) arc.getProperty (tags::sourcePort), destNode, (uint32) (int) arc.getProperty (tags::destPort), Node::arcFromValueTree (arc).gain);
 
         if (worked)
         {
@@ -751,7 +761,6 @@ void GraphManager::setNodeModel (const Node& node)
     failed.clearQuick();
 
     {
-        EL_LOAD_TRACE ("setNodeModel: enforce IO + sync arcs");
         IONodeEnforcer enforceIONodes (*this);
         processorArcsChanged();
     }
@@ -764,6 +773,27 @@ void GraphManager::savePluginStates()
         Node node (nodes.getChild (i), false);
         node.savePluginState();
     }
+}
+
+void GraphManager::unload()
+{
+    savePluginStates();
+    // IO nodes take their name from the processor, keep it for display while unloaded.
+    for (int i = 0; i < nodes.getNumChildren(); ++i)
+    {
+        Node n (nodes.getChild (i), false);
+        if (n.getName().isEmpty())
+            n.setName (n.getPluginName());
+    }
+
+    // Drop the model's processor references first: editors listening to the
+    // model release their parameter observers while the processors are alive.
+    for (int i = 0; i < nodes.getNumChildren(); ++i)
+        Node::sanitizeRuntimeProperties (nodes.getChild (i), true);
+    bindings.clear();
+    processor.clear();
+    loaded = false;
+    unloaded = true;
 }
 
 void GraphManager::clear()
@@ -787,6 +817,9 @@ void GraphManager::clear()
 
 void GraphManager::processorArcsChanged()
 {
+    if (unloaded)
+        return;
+
     ValueTree newArcs = ValueTree (tags::arcs);
     for (int i = 0; i < processor.getNumConnections(); ++i)
         newArcs.addChild (Node::makeArc (*processor.getConnection (i)), -1, nullptr);
@@ -839,7 +872,6 @@ void GraphManager::setupNode (const ValueTree& data, ProcessorPtr obj)
 
     if (auto* const proc = obj->getAudioProcessor())
     {
-        EL_LOAD_TRACE (String ("setupNode: buses: ") + node.getName());
         bool busesConfigured = false;
         {
             // try to load buses layout.
@@ -911,7 +943,6 @@ void GraphManager::setupNode (const ValueTree& data, ProcessorPtr obj)
     }
 
     {
-        EL_LOAD_TRACE (String ("setupNode: restore state: ") + node.getName());
         // A subgraph's descendants were already restored one-by-one by the
         // child GraphManager the Binding created above — restoring them again
         // here would call setStateInformation twice per nesting level.
@@ -921,7 +952,6 @@ void GraphManager::setupNode (const ValueTree& data, ProcessorPtr obj)
             node.restorePluginState();
     }
     {
-        EL_LOAD_TRACE (String ("setupNode: reset ports: ") + node.getName());
         node.resetPorts();
     }
 
@@ -949,7 +979,7 @@ RootGraphManager::~RootGraphManager() {}
 
 void RootGraphManager::unloadGraph()
 {
-    getRootGraph().clear();
+    unload();
 }
 
 } // namespace element

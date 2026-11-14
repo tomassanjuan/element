@@ -34,6 +34,17 @@ public:
     /** Call when the system wakes from sleep to re-evaluate the audio device. */
     void onResume();
 
+    /** Stops the audio device on the user's behalf. It is not reconnected
+        automatically until startAudio() is called. */
+    void stopAudio();
+
+    /** Reopens the audio device after stopAudio().
+        @return an empty string on success, otherwise the error */
+    juce::String startAudio();
+
+    /** Returns true if there is a saved audio setup startAudio() can open. */
+    bool canStartAudio() const;
+
 private:
     class Impl;
     friend class Impl;

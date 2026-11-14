@@ -22,6 +22,7 @@ class GraphEditorComponent : public Component,
                              public DragAndDropTarget,
                              public FileDragAndDropTarget,
                              private ValueTree::Listener,
+                             private Timer,
                              public ViewHelperMixin,
                              public LassoSource<uint32>
 {
@@ -120,6 +121,9 @@ private:
     } selectedNodes;
 
     bool ignoreNodeSelected = false;
+    bool cableLevelColorsEnabled = true;
+
+    void timerCallback() override;
 
     float zoomScale = 1.0;
 
@@ -249,9 +253,13 @@ public:
     void resized() override
     {
         auto r = getLocalBounds();
+        juce::Rectangle<int> content;
+        for (auto* child : _editor.getChildren())
+            content = content.getUnion (child->getBounds());
+        // canvas first, so the viewport never sees a stale larger canvas (scrollbar flash)
+        _editor.setSize (jmax (content.getRight(), r.getWidth()),
+                         jmax (content.getBottom(), r.getHeight()));
         _viewport.setBounds (r);
-        _editor.setSize (jmax (_editor.getWidth(), _viewport.getWidth()),
-                         jmax (_editor.getHeight(), _viewport.getHeight()));
     }
 
     juce::Viewport& viewport() { return _viewport; }

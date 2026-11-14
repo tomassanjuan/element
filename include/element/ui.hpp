@@ -74,8 +74,25 @@ public:
                                const bool force = false,
                                const bool focus = false);
 
+    /** Changes the global UI (desktop) scale and saves it in the settings.
+
+        @param delta  Amount to add to the current scale
+        @param reset  If true, ignore delta and go back to 100%
+    */
+    void adjustUiScale (double delta, bool reset = false);
+
+    /** Makes a session graph the active graph.
+
+        Closes the current plugin windows, switches the audio engine to the graph,
+        and shows the plugin windows of the new graph. Does nothing if the index
+        is out of range or the graph is already active.
+
+        @param index  Index of the graph in the session
+    */
+    void activateGraph (int index);
+
     /** present a plugin window */
-    void presentPluginWindow (const Node& node, const bool focus = false);
+    void presentPluginWindow (const Node& node, const bool focus);
 
     /** Sync all UI elements with application/plugin */
     void stabilizeContent();

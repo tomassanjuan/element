@@ -30,13 +30,14 @@ public:
         nodeName.setText ("", dontSendNotification);
         nodeName.setJustificationType (Justification::centredBottom);
         nodeName.setEditable (false, true, false);
-        nodeName.setFont (Font (FontOptions (Style::fontSizeDefault)));
+        nodeName.setFont (Font (FontOptions (Style::fontSizeDefault, Font::bold)));
         nodeName.onTextChange = [this] {
             if (node.isValid())
                 node.setProperty (tags::name, nodeName.getText());
         };
 
-        addAndMakeVisible (channelBox);
+        // the channel pair selector is replaced by showing every channel; kept hidden for the combo logic
+        addChildComponent (channelBox);
         channelBox.setJustificationType (Justification::centred);
 
         addAndMakeVisible (flowBox);
@@ -93,13 +94,12 @@ public:
     void resized() override
     {
         auto r (getLocalBounds());
-        nodeName.setBounds (r.removeFromTop (22).reduced (2));
-        r.removeFromTop (10); // padding between strip title and IO boxes
+        nodeName.setBounds (r.removeFromTop (24).reduced (2, 0));
+        r.removeFromTop (8); // padding between strip title and IO boxes
 
         auto r2 = r.removeFromBottom (jmin (268, r.getHeight()));
         int boxSize = r2.getWidth() - 8;
         flowBox.setBounds (r2.removeFromTop (16).withSizeKeepingCentre (boxSize, 14));
-        channelBox.setBounds (r2.removeFromTop (16).withSizeKeepingCentre (boxSize, 14));
         channelStrip.setBounds (r2);
     }
 
@@ -113,29 +113,38 @@ public:
 
     inline void timerCallback() override
     {
+        if (! isShowing())
+            return;
+
         auto& meter = channelStrip.getSimpleMeter();
         if (ProcessorPtr ptr = node.getObject())
         {
-            const int startChannel = jmax (0, channelBox.getSelectedId() - 1);
-            if (ptr->getNumAudioOutputs() == 1)
+            float level = 0.f;
+            auto feed = [&meter, &level] (int port, float value) {
+                meter.setValue (port, value);
+                level = jmax (level, value);
+            };
+
+            // every channel of the monitored side gets its own meter; a mono (or no) signal shows as a stereo pair
+            const bool monitorInputs = isAudioOutNode || isMonitoringInputs();
+            const int numChannels = monitorInputs ? ptr->getNumAudioInputs() : ptr->getNumAudioOutputs();
+            auto rms = [&] (int c) { return monitorInputs ? ptr->getInputRMS (c) : ptr->getOutputRMS (c); };
+
+            if (numChannels <= 1)
             {
-                if (isAudioOutNode)
-                    for (int c = 0; c < 2; ++c)
-                        meter.setValue (c, ptr->getInputRMS (startChannel));
-                else
-                    for (int c = 0; c < 2; ++c)
-                        meter.setValue (c, ptr->getOutputRMS (startChannel));
+                channelStrip.setMeterChannels (2);
+                for (int c = 0; c < 2; ++c)
+                    feed (c, numChannels == 1 ? rms (0) : 0.f);
             }
             else
             {
-                const int endChannel = startChannel + 2;
-                if (isAudioOutNode || isMonitoringInputs())
-                    for (int c = startChannel; c < endChannel; ++c)
-                        meter.setValue (c - startChannel, ptr->getInputRMS (c));
-                else
-                    for (int c = startChannel; c < endChannel; ++c)
-                        meter.setValue (c - startChannel, ptr->getOutputRMS (c));
+                const int shown = jmin (numChannels, maxMeterChannels);
+                channelStrip.setMeterChannels (shown);
+                for (int c = 0; c < shown; ++c)
+                    feed (c, rms (c));
             }
+
+            channelStrip.setLevelDb (Decibels::gainToDecibels (level, -100.f) + levelmeter::rmsCalibrationDb);
 
             const auto cv = getCurrentVolume();
             if (static_cast<float> (channelStrip.getVolume()) != cv)
@@ -148,6 +157,7 @@ public:
         else
         {
             meter.resetPeaks();
+            channelStrip.setLevelDb (-60.f);
             stopTimer();
         }
 
@@ -247,6 +257,10 @@ private:
     PortArray audioIns, audioOuts;
     ComboBox channelBox, flowBox;
     ChannelStripComponent channelStrip;
+public:
+    static constexpr int maxMeterChannels = 16;
+
+private:
     bool listenForNodeSelected;
 
     bool useFlowBox = true;
@@ -345,14 +359,9 @@ private:
             }
 
             if (channelBox.getNumItems() > 0)
-            {
-                channelBox.setVisible (useFlowBox);
                 channelBox.setSelectedItemIndex (0);
-            }
-            else
-            {
-                channelBox.setVisible (false);
-            }
+
+            channelBox.setVisible (false);
         }
     }
 

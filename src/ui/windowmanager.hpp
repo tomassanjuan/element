@@ -17,10 +17,7 @@ class WindowManager
 {
 public:
     WindowManager (GuiService& g);
-    ~WindowManager()
-    {
-        closeAll();
-    }
+    ~WindowManager();
 
     inline void closeAll()
     {
@@ -143,8 +140,15 @@ public:
 
     PluginWindow* createPluginWindowFor (const Node& node);
 
+    /** Closes the plugin window that is the foreground window, if any.
+
+        @return true if a window was closed
+    */
+    bool closeForegroundPluginWindow();
+
 private:
     GuiService& gui;
+    void* escapeHook = nullptr;
     OwnedArray<PluginWindow> activePluginWindows;
     OwnedArray<Window> activeWindows;
     OwnedArray<DialogWindow> activeDialogs;

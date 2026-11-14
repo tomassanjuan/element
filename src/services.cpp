@@ -299,6 +299,10 @@ void Services::handleMessage (const Message& msg)
         if (cbm->onFinished)
             cbm->onFinished();
     }
+    else if (const auto* ccg = dynamic_cast<const ChangeConnectionGainMessage*> (&msg))
+    {
+        ec->setConnectionGain (ccg->sourceNode, ccg->sourcePort, ccg->destNode, ccg->destPort, ccg->db, ccg->graph);
+    }
     else if (const auto* osm = dynamic_cast<const OpenSessionMessage*> (&msg))
     {
         sess->openFile (osm->file);

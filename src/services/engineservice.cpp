@@ -15,7 +15,6 @@
 #include "engine/graphmanager.hpp"
 #include "engine/rootgraph.hpp"
 #include "nodes/mididevice.hpp"
-#include "tracer.hpp"
 
 #define ELEMENT_TRACE_SESSION_LOAD EL_TRACE_SESSION_LOAD
 
@@ -24,6 +23,14 @@ using namespace juce;
 namespace element {
 
 namespace detail {
+/** True if an inactive graph should stay loaded: neither the global unload
+    setting nor the graph's own persistent flag asks for it to be released. */
+static bool keepsLoadedWhenInactive (Context& ctx, const Node& graph)
+{
+    return ! ctx.settings().unloadInactiveGraphs()
+           && (bool) graph.getProperty (tags::persistent, true);
+}
+
 static void initializeRootGraphPorts (RootGraph* root, const Node& model)
 {
     PortArray ins, outs;
@@ -99,9 +106,8 @@ struct RootGraphHolder
         done already. Properties are set from the model, so make sure they are
         correct before calling this 
      */
-    bool attach (AudioEnginePtr engine)
+    bool attach (AudioEnginePtr engine, bool load = true)
     {
-        EL_LOAD_TRACE (String ("RootGraphHolder::attach: ") + model.getName());
         jassert (engine);
         if (! engine)
         {
@@ -137,7 +143,10 @@ struct RootGraphHolder
                 controller = std::make_unique<RootGraphManager> (*root, plugins);
                 model.setProperty (tags::object, node.get());
 
-                controller->setNodeModel (model);
+                if (load)
+                    controller->setNodeModel (model);
+                else
+                    controller->unload();
             }
             else
             {
@@ -327,6 +336,12 @@ void EngineService::addConnection (const uint32 s, const uint32 sp, const uint32
 {
     if (auto* controller = graphs->findGraphManagerFor (graph))
         controller->addConnection (s, sp, d, dp);
+}
+
+void EngineService::setConnectionGain (const uint32 s, const uint32 sp, const uint32 d, const uint32 dp, const float db, const Node& graph)
+{
+    if (auto* controller = graphs->findGraphManagerFor (graph))
+        controller->setConnectionGain (s, sp, d, dp, db);
 }
 
 void EngineService::addGraph()
@@ -648,7 +663,7 @@ void EngineService::addNode (const Node& _node)
     {
         const Node actual (root->getNodeModelForId (nodeId));
         if (context().settings().showPluginWindowsWhenAdded())
-            sibling<GuiService>()->presentPluginWindow (actual);
+            sibling<GuiService>()->presentPluginWindow (actual, true);
     }
     else
     {
@@ -687,7 +702,7 @@ Node EngineService::addPlugin (const PluginDescription& desc, const bool verifie
         {
             node = root->getNodeModelForId (nodeId);
             if (! dontShowUI && context().settings().showPluginWindowsWhenAdded())
-                sibling<GuiService>()->presentPluginWindow (node);
+                sibling<GuiService>()->presentPluginWindow (node, true);
         }
     }
     else
@@ -837,26 +852,7 @@ void EngineService::setRootNode (const Node& newRootNode)
         holder->attach (engine);
     const int index = holder->getRootGraph()->getEngineIndex();
 
-#if 0
-    // saving this for reference. graphs will need to be
-    // explicitly de-activated by users to unload them
-    // moving forward - MRF
-    
-    /* Unload the active graph if necessary */
-    auto* active = graphs->findActiveInEngine();
-    if (active && active != holder)
-    {
-        if (auto* gui = sibling<GuiService>())
-            gui->closeAllPluginWindows();
-        
-        if (! (bool) active->model.getProperty(tags::persistent) && active->attached())
-        {
-            active->controller->savePluginStates();
-            active->controller->unloadGraph();
-            DBG("[element] graph unloaded: " << active->model.getName());
-        }
-    }
-#endif
+    auto* previous = graphs->findActiveInEngine();
 
     if (auto* proc = holder->getRootGraph())
     {
@@ -881,6 +877,23 @@ void EngineService::setRootNode (const Node& newRootNode)
         }
 
         engine->setActiveGraphIndex (index);
+
+        if (previous != nullptr && previous != holder && previous->attached()
+            && ! detail::keepsLoadedWhenInactive (context(), previous->model))
+        {
+            // Deferred so the UI has moved to the new graph before the old
+            // graph's processors are released.
+            auto& ctx = context();
+            const Node previousModel (previous->model);
+            MessageManager::callAsync ([&ctx, previousModel] {
+                auto* self = ctx.services().find<EngineService>();
+                auto* h = self != nullptr ? self->graphs->findFor (previousModel) : nullptr;
+                if (h == nullptr || ! h->attached() || h == self->graphs->findActiveInEngine()
+                    || detail::keepsLoadedWhenInactive (ctx, h->model))
+                    return;
+                h->getController()->unloadGraph();
+            });
+        }
     }
     else
     {
@@ -888,6 +901,27 @@ void EngineService::setRootNode (const Node& newRootNode)
     }
 
     engine->refreshSession();
+}
+
+void EngineService::applyGraphUnloadPolicy()
+{
+    const auto* active = graphs->findActiveInEngine();
+    for (auto* holder : graphs->getGraphs())
+    {
+        if (holder == active || ! holder->attached() || ! holder->getController()->isLoaded())
+            continue;
+        if (! detail::keepsLoadedWhenInactive (context(), holder->model))
+            holder->getController()->unloadGraph();
+    }
+}
+
+bool EngineService::isGraphLoaded (const Node& graph) const
+{
+    if (! graph.isRootGraph())
+        return true;
+    const auto* holder = graphs->findFor (graph);
+    const auto* controller = holder != nullptr ? holder->getController() : nullptr;
+    return controller != nullptr && controller->isLoaded();
 }
 
 void EngineService::syncModels()
@@ -972,7 +1006,6 @@ Node EngineService::addPlugin (const Node& graph, const PluginDescription& desc,
 
 void EngineService::sessionReloaded()
 {
-    EL_LOAD_TRACE ("EngineService::sessionReloaded");
     graphs->clear();
 
     auto session = context().session();
@@ -985,7 +1018,9 @@ void EngineService::sessionReloaded()
             Node rootGraph (session->getGraph (i));
             if (auto* holder = graphs->add (new RootGraphHolder (rootGraph, context())))
             {
-                if (! holder->attach (engine))
+                const bool load = rootGraph == session->getActiveGraph()
+                                  || detail::keepsLoadedWhenInactive (context(), rootGraph);
+                if (! holder->attach (engine, load))
                 {
                     std::clog << "[element] failed attaching root grapn: " << holder->model.getName() << std::endl;
                 }
@@ -1027,7 +1062,7 @@ Node EngineService::addPlugin (GraphManager& c, const PluginDescription& desc)
 
         const Node node (c.getNodeModelForId (nodeId));
         if (context().settings().showPluginWindowsWhenAdded())
-            sibling<GuiService>()->presentPluginWindow (node);
+            sibling<GuiService>()->presentPluginWindow (node, true);
         if (! node.isValid())
         {
             jassertfalse; // fatal, but continue
@@ -1183,7 +1218,7 @@ void EngineService::replace (const Node& node, const PluginDescription& desc)
 
             removeNode (node);
             if (wasWindowOpen)
-                sibling<GuiService>()->presentPluginWindow (newNode);
+                sibling<GuiService>()->presentPluginWindow (newNode, true);
         }
     }
 

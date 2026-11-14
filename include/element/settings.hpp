@@ -45,8 +45,13 @@ public:
     static const char* oscHostEnabledKey;
     static const char* systrayKey;
     static const char* startHiddenKey;
+    static const char* closeToTrayKey;
+    static const char* unloadInactiveGraphsKey;
+    static const char* cableLevelColorsKey;
     static const char* midiOutLatencyKey;
     static const char* desktopScaleKey;
+    static const char* meterColorSchemeKey;
+    static const char* bridgeLevelModeKey;
     static const char* mainContentTypeKey;
     static const char* pluginListHeaderKey;
     static const char* devicesKey;
@@ -130,16 +135,42 @@ public:
     bool isSystrayEnabled() const;
     void setSystrayEnabled (bool);
 
-    /** True if the main window should start hidden in the system tray.
-        Only meaningful when the system tray is enabled and available. */
-    bool isStartHiddenEnabled() const;
-    void setStartHiddenEnabled (bool);
+    /** Whether every graph that is not active gets unloaded, regardless of
+        its own "persistent" property. */
+    bool unloadInactiveGraphs() const;
+    void setUnloadInactiveGraphs (bool);
+
+    /** Whether minimising the main window hides it to the system tray. */
+    bool isCloseToTrayEnabled() const;
+    void setCloseToTrayEnabled (bool);
+
+    /** How the main window starts when the system tray is enabled:
+        0 = Off (shown), 1 = Always hidden, 2 = Remember the last state. */
+    int getStartHiddenMode() const;
+    void setStartHiddenMode (int);
+
+    /** True if graph editor audio cables are colored by signal level. */
+    bool isCableLevelColorsEnabled() const;
+    void setCableLevelColorsEnabled (bool);
 
     double getMidiOutLatency() const;
     void setMidiOutLatency (double latencyMs);
 
     double getDesktopScale() const;
     void setDesktopScale (double);
+
+    /** Meter color scheme: 0 = original, 1 = standard (green, yellow, red). */
+    /** Meter bridge level mode: 0 = peak, 1 = RMS. */
+    int getBridgeLevelMode() const;
+    void setBridgeLevelMode (int);
+
+    int getMeterColorScheme() const;
+    void setMeterColorScheme (int);
+
+    /** Pushes the stored meter color scheme and bridge level mode to the meters.
+
+        Called by the setters and once at startup. */
+    void applyMeterSettings() const;
 
     juce::String getMainContentType() const;
     void setMainContentType (const juce::String&);

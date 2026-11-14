@@ -135,6 +135,19 @@ public:
     /** Call when the system wakes from sleep. */
     void onResume();
 
+    /** Closes the device on the user's behalf and stops watching it.
+        The saved setup is kept so start() can reopen it; unlike a
+        disconnect, the monitor will not try to reconnect. */
+    void stop();
+
+    /** Reopens the saved setup after stop().
+        @return an empty string on success, otherwise the error. On failure
+                the monitor stays inactive instead of retrying in the background. */
+    juce::String start();
+
+    /** Returns true if a saved setup exists for start() to open. */
+    bool canStart() const noexcept { return hasDesired(); }
+
     Status status() const { return current; }
 
     /** Fires on the message thread whenever the status changes. */
@@ -158,6 +171,7 @@ private:
     bool desiredPresent (bool rescan);
     bool matchesDesired (const DeviceInfo& device) const;
     void updateDesiredFromBackend();
+    bool openDesired (juce::String& error);
     void attemptRestore();
     void enterWaiting();
     void setState (State newState, const juce::String& deviceName);

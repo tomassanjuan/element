@@ -23,6 +23,7 @@
 #include "ui/emptyview.hpp"
 #include "ui/grapheditorview.hpp"
 #include "ui/graphmixerview.hpp"
+#include "ui/performanceview.hpp"
 #include "ui/keymapeditorview.hpp"
 #include "ui/luaconsoleview.hpp"
 #include "ui/mainmenu.hpp"
@@ -141,7 +142,6 @@ public:
             };
 
             layout.layOutComponents (comps, 3, 0, 0, r.getWidth(), r.getHeight(), true, true);
-            lastSecondaryHeight = secondary->getHeight();
         }
         else
         {
@@ -225,9 +225,9 @@ public:
         if (showAccessoryView)
         {
             lastSecondaryHeight = jmax (50, lastSecondaryHeight);
-            layout.setItemLayout (0, 48, -1.0, primary->getHeight() - 4 - lastSecondaryHeight);
+            layout.setItemLayout (0, 48, -1.0, -1.0);
             layout.setItemLayout (1, barSize, barSize, barSize);
-            layout.setItemLayout (2, 48, -1.0, lastSecondaryHeight);
+            layout.setItemLayout (2, lastSecondaryHeight, lastSecondaryHeight, lastSecondaryHeight);
         }
 
         resized();
@@ -293,10 +293,17 @@ private:
             g.fillAll (Colours::black);
         }
 
+        bool bridgeSuppressed = false;
+
+        bool showBridge() const { return bridge->isVisible() && ! bridgeSuppressed; }
+
         void resized() override
         {
             auto r = getLocalBounds();
-            if (keyboard->isVisible() && bridge->isVisible())
+            if (! showBridge())
+                bridge->setBounds ({});
+
+            if (keyboard->isVisible() && showBridge())
             {
                 keyboard->setBounds (r.removeFromBottom (80));
                 r.removeFromBottom (1);
@@ -304,15 +311,15 @@ private:
             }
             else if (keyboard->isVisible())
                 keyboard->setBounds (r.removeFromBottom (80));
-            else if (bridge->isVisible())
+            else if (showBridge())
                 bridge->setBounds (r.removeFromBottom (80));
         }
 
         int requiredHeight()
         {
             int h = keyboard->isVisible() ? 80 : 0;
-            h += (bridge->isVisible() ? 80 : 0);
-            if (keyboard->isVisible() && bridge->isVisible())
+            h += (showBridge() ? 80 : 0);
+            if (keyboard->isVisible() && showBridge())
                 h += 1;
             return h;
         }
@@ -346,6 +353,7 @@ private:
         if (showAccessoryView)
         {
             capturedAccessoryHeight = secondary->getHeight();
+            lastSecondaryHeight = capturedAccessoryHeight;
         }
     }
 
@@ -420,7 +428,7 @@ StandardContent::StandardContent (Context& ctl_)
     nav->setSize (304, getHeight());
     resizerMouseUp();
     if (auto gp = nav->findPanel<GraphSettingsView>())
-        nav->expandPanelFully (gp, false);
+        nav->setPanelSize (gp, 250, false);
     if (auto stp = nav->findPanel<SessionTreePanel>())
         nav->setPanelSize (stp, 200, false);
 
@@ -579,6 +587,10 @@ void StandardContent::setSecondaryView (const String& name)
     else if (name == EL_VIEW_CONSOLE)
     {
         setContentView (new LuaConsoleView(), true);
+    }
+    else if (name == EL_VIEW_PERFORMANCE)
+    {
+        setContentView (new PerformanceView(), true);
     }
 }
 
@@ -916,6 +928,7 @@ void StandardContent::getAllCommands (Array<CommandID>& commands)
         Commands::showGraphEditor,
         Commands::showGraphMixer,
         Commands::showConsole,
+        Commands::showPerformance,
         Commands::toggleVirtualKeyboard,
         Commands::toggleMeterBridge,
         Commands::toggleChannelStrip,
@@ -974,7 +987,7 @@ void StandardContent::getCommandInfo (CommandID commandID, ApplicationCommandInf
             int flags = 0;
             if (getMainViewName() == "PatchBay")
                 flags |= Info::isTicked;
-            result.addDefaultKeypress (KeyPress::F1Key, 0);
+            result.addDefaultKeypress (KeyPress::F2Key, 0);
             result.setInfo ("Patch Bay", "Show the patch bay", "UI", flags);
             break;
         }
@@ -983,7 +996,7 @@ void StandardContent::getCommandInfo (CommandID commandID, ApplicationCommandInf
             int flags = 0;
             if (getMainViewName() == EL_VIEW_GRAPH_EDITOR)
                 flags |= Info::isTicked;
-            result.addDefaultKeypress (KeyPress::F2Key, 0);
+            result.addDefaultKeypress (KeyPress::F1Key, 0);
             result.setInfo ("Graph Editor", "Show the graph editor", "UI", flags);
         }
         break;
@@ -992,6 +1005,7 @@ void StandardContent::getCommandInfo (CommandID commandID, ApplicationCommandInf
             int flags = (showAccessoryView() && getAccessoryViewName() == EL_VIEW_GRAPH_MIXER)
                             ? Info::isTicked
                             : 0;
+            result.addDefaultKeypress (KeyPress::F3Key, 0);
             result.setInfo ("Graph Mixer", "Show/hide the graph mixer", "UI", flags);
             break;
         }
@@ -1000,8 +1014,17 @@ void StandardContent::getCommandInfo (CommandID commandID, ApplicationCommandInf
             int flags = (showAccessoryView() && getAccessoryViewName() == EL_VIEW_CONSOLE)
                             ? Info::isTicked
                             : 0;
-            result.addDefaultKeypress (KeyPress::F3Key, 0);
+            result.addDefaultKeypress (KeyPress::F5Key, 0);
             result.setInfo ("Console", "Show the scripting console", "UI", flags);
+            break;
+        }
+        //======================================================================
+        case Commands::showPerformance: {
+            int flags = (showAccessoryView() && getAccessoryViewName() == EL_VIEW_PERFORMANCE)
+                            ? Info::isTicked
+                            : 0;
+            result.addDefaultKeypress (KeyPress::F4Key, 0);
+            result.setInfo ("Performance", "Show engine load and per-node render time", "UI", flags);
             break;
         }
         //======================================================================
@@ -1096,6 +1119,13 @@ bool StandardContent::perform (const InvocationInfo& info)
             {
                 setSecondaryView (EL_VIEW_CONSOLE);
             }
+            break;
+        }
+        case Commands::showPerformance: {
+            if (showAccessoryView() && getAccessoryViewName() == EL_VIEW_PERFORMANCE)
+                container->setSecondaryView (nullptr);
+            else
+                setSecondaryView (EL_VIEW_PERFORMANCE);
             break;
         }
 
@@ -1294,6 +1324,15 @@ void StandardContent::setMeterBridgeVisible (bool vis)
 bool StandardContent::isMeterBridgeVisible() const
 {
     return container->bottom->bridge->isVisible();
+}
+
+void StandardContent::setMeterBridgeSuppressed (bool suppressed)
+{
+    if (container->bottom->bridgeSuppressed == suppressed)
+        return;
+    container->bottom->bridgeSuppressed = suppressed;
+    container->bottom->resized();
+    container->resized();
 }
 
 } // namespace element

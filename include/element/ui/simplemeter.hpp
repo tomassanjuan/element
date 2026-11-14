@@ -4,6 +4,7 @@
 #pragma once
 
 #include <element/juce/gui_basics.hpp>
+#include <element/ui/cliphold.hpp>
 
 namespace element {
 
@@ -27,6 +28,9 @@ public:
 
     void paint (juce::Graphics& g) override;
 
+    /** Clicking the meter clears the held peak and clip state. */
+    void mouseDown (const juce::MouseEvent&) override;
+
     /** @internal */
     void resized() override;
 
@@ -49,6 +53,7 @@ private:
     int peakHold;
     float peakDecay;
     int peakColor;
+    ClipHold clip;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SimpleMeterValue)
 };
 
@@ -60,6 +65,10 @@ public:
 
     /** Returns the number of ports on this meter */
     int getPortCount() const;
+
+    /** Changes the number of channels shown. Held levels are cleared. */
+    void setPortCount (int numPorts);
+
     void setValue (const int port, const float value);
     int getIECScale (const float dB) const;
     int getIECLevel (const int index) const;
@@ -84,6 +93,17 @@ public:
     };
 
     const juce::Colour& color (const int index) const;
+
+    /** How level colors are chosen. Applies to all SimpleMeters. */
+    enum class ColorScheme {
+        /** Blended gradient colors from the style. */
+        Original = 0,
+        /** Green below -6 dB, yellow from -6 to 0 dB, red above 0 dB. */
+        Standard = 1
+    };
+
+    static void setColorScheme (ColorScheme);
+    static ColorScheme getColorScheme();
 
     enum ColoursIds {
         levelOverColourId = 0x90900001,

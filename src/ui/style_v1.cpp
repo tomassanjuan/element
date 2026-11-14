@@ -720,26 +720,6 @@ void LookAndFeel_E1::drawStretchableLayoutResizerBar (Graphics& g, int /*w*/, in
         g.fillAll (Colors::elemental.withAlpha (0.4f));
 }
 
-void LookAndFeel_E1::drawConcertinaPanelHeader (Graphics& g, const Rectangle<int>& area, bool isMouseOver, bool isMouseDown, ConcertinaPanel& concertina, Component& panel)
-{
-    g.setColour (Colour (0xff212121));
-    Rectangle<int> r (area.withSizeKeepingCentre (area.getWidth(), area.getHeight() - 2));
-    g.fillRect (r);
-
-    const Colour bkg (Colors::widgetBackgroundColor.brighter (0.1f));
-
-    // g.setGradientFill (ColourGradient (Colours::white.withAlpha (isMouseOver ? 0.4f : 0.2f), 0, (float) area.getY(), Colours::darkgrey.withAlpha (0.2f), 0, (float) area.getBottom(), false));
-    g.fillAll();
-
-    g.setColour (bkg.contrasting().withAlpha (0.04f));
-    g.fillRect (area.withHeight (1));
-    g.fillRect (area.withTop (area.getBottom() - 1));
-
-    g.setColour (findColour (Label::textColourId));
-    g.setFont (Font (FontOptions (area.getHeight() * 0.62f).withStyle ("Bold")));
-    g.drawFittedText (panel.getName().toUpperCase(), 8, 0, area.getWidth() - 6, area.getHeight(), Justification::centredLeft, 1);
-}
-
 //==============================================================================
 // ProgressBar
 void LookAndFeel_E1::drawLinearProgressBar (Graphics& g, ProgressBar& progressBar, int width, int height, double progress, const String& textToShow)
@@ -1107,21 +1087,6 @@ void LookAndFeel_E1::drawKeymapChangeButton (Graphics& g, int width, int height,
 }
 
     // AlertWindow
-juce::AlertWindow* LookAndFeel_E1::createAlertWindow (const juce::String& title, 
-                                                      const juce::String& message,
-                                                      const juce::String& button1,
-                                                      const juce::String& button2,
-                                                      const juce::String& button3,
-                                                      juce::MessageBoxIconType iconType,
-                                                      int numButtons,
-                                                      juce::Component* associatedComponent)
-{
-    return LookAndFeel_V3::createAlertWindow (title, message, 
-                                              button1, button2, button3, 
-                                              iconType, numButtons, 
-                                              associatedComponent);
-}
-
 void LookAndFeel_E1::drawAlertBox (juce::Graphics& g, 
                                    juce::AlertWindow& w, 
                                    const juce::Rectangle<int>& r, 

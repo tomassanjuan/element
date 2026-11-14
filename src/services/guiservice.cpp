@@ -18,13 +18,14 @@
 
 #include "auth.hpp"
 #include "engine/midipanic.hpp"
-#include "tracer.hpp"
 #include "messages.hpp"
 #include "services/mappingservice.hpp"
 #include "services/sessionservice.hpp"
 #include "ui/aboutscreen.hpp"
 #include "ui/capslock.hpp"
 #include "ui/pluginwindow.hpp"
+#include <element/ui/meterbridge.hpp>
+#include <element/ui/simplemeter.hpp>
 #include "ui/systemtray.hpp"
 #include "ui/virtualkeyboardview.hpp"
 #include "ui/windowmanager.hpp"
@@ -44,7 +45,7 @@ static bool shouldStartHidden (Settings& settings)
     if (! SystemTray::isAvailable() || ! settings.isSystrayEnabled())
         return false;
 
-    if (settings.isStartHiddenEnabled())
+    if (settings.getStartHiddenMode() == 1)
         return true;
 
     if (JUCEApplicationBase::getCommandLineParameterArray().contains ("--hidden"))
@@ -96,7 +97,8 @@ struct GlobalLookAndFeel
 };
 
 /** Dispatches global key presses */
-struct GuiService::KeyPressManager : public KeyListener
+struct GuiService::KeyPressManager : public KeyListener,
+                                     public MouseListener
 {
     KeyPressManager (GuiService& g) : owner (g) {}
     ~KeyPressManager() {}
@@ -110,7 +112,63 @@ struct GuiService::KeyPressManager : public KeyListener
         if (! handled)
             handled = handleGraphChange (key, component);
 
+        if (! handled)
+            handled = handleUiScale (key);
+
+#if JUCE_MAC
+        if (! handled)
+            handled = handleHideWindow (key, component);
+#endif
+
         return handled;
+    }
+
+    /** Ctrl+scroll over the main window changes the global UI scale. */
+    void mouseWheelMove (const MouseEvent& ev, const MouseWheelDetails& wheel) override
+    {
+        if (! ev.mods.isCommandDown() || wheel.deltaY == 0.f || owner.mainWindow == nullptr)
+            return;
+        if (ev.eventComponent == nullptr || ev.eventComponent->getTopLevelComponent() != owner.mainWindow.get())
+            return;
+        owner.adjustUiScale (wheel.deltaY > 0.f ? uiScaleStep : -uiScaleStep);
+    }
+
+    static constexpr double uiScaleStep = 0.05;
+
+#if JUCE_MAC
+    /** Cmd+W on the main window hides it to the menu bar icon, or hides the app when there is no icon. */
+    bool handleHideWindow (const KeyPress& key, Component* component)
+    {
+        if (key != KeyPress ('w', ModifierKeys::commandModifier, 0)
+            || owner.mainWindow == nullptr
+            || component == nullptr
+            || component->getTopLevelComponent() != owner.mainWindow.get())
+            return false;
+
+        if (owner.context().settings().isSystrayEnabled())
+            owner.commands().invokeDirectly (Commands::toggleUserInterface, true);
+        else
+            Process::hide();
+        return true;
+    }
+#endif
+
+    bool handleUiScale (const KeyPress& key)
+    {
+        if (! key.getModifiers().isCommandDown())
+            return false;
+
+        const auto code = key.getKeyCode();
+        if (code == '=' || code == '+' || code == KeyPress::numberPadAdd)
+            owner.adjustUiScale (uiScaleStep * 2);
+        else if (code == '-' || code == '_' || code == KeyPress::numberPadSubtract)
+            owner.adjustUiScale (-uiScaleStep * 2);
+        else if (code == '0' || code == KeyPress::numberPad0)
+            owner.adjustUiScale (0.0, true);
+        else
+            return false;
+
+        return true;
     }
 
     bool keyStateChanged (bool isKeyDown, Component* component) override
@@ -168,11 +226,7 @@ private:
         const auto gp = KeyPress::createFromDescription (g.getProperty (tags::keyMap));
         if (gp.isValid() && key == gp)
         {
-            owner.closeAllPluginWindows (true);
-            auto graphs = session->data().getChildWithName (tags::graphs);
-            graphs.setProperty (tags::active, graphs.indexOf (g.data()), 0);
-            owner.sibling<EngineService>()->setRootNode (g);
-            owner.showPluginWindowsFor (g, true, false, false);
+            owner.activateGraph (session->data().getChildWithName (tags::graphs).indexOf (g.data()));
             return true;
         }
 
@@ -333,6 +387,7 @@ GuiService::GuiService (Context& w, Services& a)
     factory = std::make_unique<DefaultContentFactory> (w);
     updates = std::make_unique<UpdateManager>();
     keys.reset (new KeyPressManager (*this));
+    Desktop::getInstance().addGlobalMouseListener (keys.get());
     windowManager.reset (new WindowManager (*this));
 
     auto& commands = impl->commands;
@@ -370,6 +425,8 @@ void GuiService::saveProperties (PropertiesFile* props)
     {
         props->setValue ("mainWindowState", mainWindow->getWindowStateAsString());
         props->setValue ("mainWindowFullScreen", mainWindow->isFullScreen());
+        props->setValue ("mainWindowMinimised", mainWindow->isMinimised());
+        props->setValue ("mainWindowHidden", ! mainWindow->isOnDesktop());
     }
 
     if (_content)
@@ -409,6 +466,8 @@ void GuiService::deactivate()
         mainWindow = nullptr;
     }
 
+    if (keys)
+        Desktop::getInstance().removeGlobalMouseListener (keys.get());
     keys = nullptr;
 
     if (windowManager)
@@ -539,6 +598,41 @@ void GuiService::closePluginWindowsFor (uint32 nodeId, const bool visible)
     if (windowManager)
         windowManager->closeOpenPluginWindowsFor (nodeId, visible);
 }
+void GuiService::adjustUiScale (double delta, bool reset)
+{
+    auto& prefs = context().settings();
+    const auto target = reset ? 1.0 : prefs.getDesktopScale() + delta;
+    const auto scale = jlimit (0.5, 3.0, std::round (target * 20.0) / 20.0);
+    prefs.setDesktopScale (scale);
+    Desktop::getInstance().setGlobalScaleFactor ((float) scale);
+    prefs.sendChangeMessage();
+}
+
+void GuiService::activateGraph (int index)
+{
+    auto sess = session();
+    if (sess == nullptr || ! juce::isPositiveAndBelow (index, sess->getNumGraphs()))
+        return;
+
+    const auto graph = sess->getGraph (index);
+    if (graph == sess->getActiveGraph())
+        return;
+
+    closeAllPluginWindows (true);
+    sess->setActiveGraph (index);
+    sibling<EngineService>()->setRootNode (graph);
+    showPluginWindowsFor (graph, true, false, false);
+
+    if (auto* c = content())
+        c->setCurrentNode (graph);
+
+    // The sidebar and the mixer follow the selected node, like a tree click.
+    if (getSelectedNode() == graph)
+        nodeSelected();
+    else
+        selectNode (graph);
+}
+
 void GuiService::closeAllPluginWindows (const bool visible)
 {
     if (windowManager)
@@ -618,7 +712,7 @@ void GuiService::showPluginWindowsFor (const Node& node, const bool recursive, c
     if (! node.isGraph())
     {
         if (force || (bool) node.getProperty (tags::windowVisible, false))
-            presentPluginWindow (node, force);
+            presentPluginWindow (node, focus);
         return;
     }
 
@@ -629,7 +723,6 @@ void GuiService::showPluginWindowsFor (const Node& node, const bool recursive, c
 
 void GuiService::presentPluginWindow (const Node& node, const bool focus)
 {
-    EL_LOAD_TRACE (String ("presentPluginWindow: ") + node.getName());
     if (! windowManager)
         return;
 
@@ -686,6 +779,7 @@ void GuiService::run()
 
     Desktop::getInstance().setGlobalScaleFactor (
         context().settings().getDesktopScale());
+    settings.applyMeterSettings();
 
     mainWindow = factory->createMainWindow();
     if (mainWindow == nullptr)
@@ -704,7 +798,10 @@ void GuiService::run()
     _content->restoreState (pf);
 
     const auto windowState = pf->getValue ("mainWindowState");
-    if (! shouldStartHidden (settings))
+    const bool wasHidden = settings.getStartHiddenMode() == 2
+                           && pf->getBoolValue ("mainWindowHidden", false)
+                           && SystemTray::isAvailable() && settings.isSystrayEnabled();
+    if (! wasHidden && ! shouldStartHidden (settings))
     {
         // Create the native peer before restoring bounds so the window frame is
         // known and the title bar is kept clear of docked taskbars.
@@ -713,6 +810,8 @@ void GuiService::run()
         mainWindow->setVisible (true);
         if (pf->getBoolValue ("mainWindowFullScreen", false))
             mainWindow->setFullScreen (true);
+        else if (pf->getBoolValue ("mainWindowMinimised", false))
+            mainWindow->setMinimised (true);
     }
     else
     {
@@ -990,7 +1089,7 @@ bool GuiService::perform (const InvocationInfo& info)
             break;
         case Commands::showAllPluginWindows: {
             if (auto s = context().session())
-                showPluginWindowsFor (s->getActiveGraph(), true, true);
+                showPluginWindowsFor (s->getActiveGraph(), true, true, true);
             break;
         }
         case Commands::hideAllPluginWindows: {
@@ -1029,6 +1128,8 @@ bool GuiService::perform (const InvocationInfo& info)
                 else
                 {
                     window->addToDesktop();
+                    // A window created hidden ("start hidden") was never made visible.
+                    window->setVisible (true);
                     // Re-run the constrainer now the native frame is known so
                     // the title bar isn't left under a docked taskbar.
                     window->setBoundsConstrained (window->getBounds());
@@ -1144,7 +1245,6 @@ bool GuiService::perform (const InvocationInfo& info)
 
 void GuiService::stabilizeContent()
 {
-    EL_LOAD_TRACE ("GuiService::stabilizeContent");
     if (auto* cc = _content.get())
         cc->stabilize();
     refreshMainMenu();

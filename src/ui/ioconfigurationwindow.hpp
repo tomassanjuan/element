@@ -58,6 +58,8 @@ private:
     Node _node;
 
     juce::TextButton applyButton { "Apply", "ApplyButton" };
+    juce::ToggleButton allBusesToggle { "Same layout on all buses" };
+    juce::Label warning;
 
     InputOutputConfig* getConfig (bool isInput) noexcept { return isInput ? inConfig.get() : outConfig.get(); }
     void update();

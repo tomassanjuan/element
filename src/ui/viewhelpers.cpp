@@ -192,7 +192,7 @@ void presentPluginWindow (Component* c, const Node& node)
 {
     if (auto* cc = findContentComponent (c))
         if (auto* gui = cc->services().find<GuiService>())
-            gui->presentPluginWindow (node);
+            gui->presentPluginWindow (node, true);
 }
 
 void closePluginWindows (Component* c, const bool visible)

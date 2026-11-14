@@ -243,6 +243,8 @@ public:
     void paintOverChildren (Graphics& g) override;
     /** @internal */
     void resized() override;
+    /** @internal */
+    void visibilityChanged() override;
 
     bool isInterestedInDragSource (const SourceDetails& details) override;
     void itemDropped (const SourceDetails& details) override;
@@ -296,6 +298,8 @@ private:
     bool blockDrag = false;
     bool collapsed = false;
 
+    int snapFeatureX = -1, snapFeatureY = -1;
+    int snapTargetX = 0, snapTargetY = 0;
     int lastDragDeltaX = 0;
     int lastDragDeltaY = 0;
 
@@ -437,6 +441,15 @@ private:
         BlockComponent& block;
         void timerCallback() override;
     } embedInit;
+
+    /** Polls the processor's own latency (plugins can report it after load). */
+    struct LatencyHint : public juce::Timer
+    {
+        LatencyHint (BlockComponent& b) : block (b) {}
+        BlockComponent& block;
+        juce::String text;
+        void timerCallback() override;
+    } latencyHint;
 
 #if 0
 void itemDragEnter (const SourceDetails& dragSourceDetails);

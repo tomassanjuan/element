@@ -196,6 +196,16 @@ public:
             monitor->onResume();
     }
 
+    void stop()
+    {
+        if (monitor != nullptr)
+            monitor->stop();
+    }
+
+    juce::String start() { return monitor != nullptr ? monitor->start() : "Audio device monitoring is not active."; }
+
+    bool canStart() const { return monitor != nullptr && monitor->canStart(); }
+
 private:
     void changeListenerCallback (juce::ChangeBroadcaster* source) override
     {
@@ -285,5 +295,9 @@ void DeviceService::onResume()
 {
     impl->resumed();
 }
+
+void DeviceService::stopAudio() { impl->stop(); }
+juce::String DeviceService::startAudio() { return impl->start(); }
+bool DeviceService::canStartAudio() const { return impl->canStart(); }
 
 } // namespace element
