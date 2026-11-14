@@ -4,6 +4,8 @@
 #include <element/context.hpp>
 #include <element/devices.hpp>
 #include <element/settings.hpp>
+#include <element/ui/meterbridge.hpp>
+#include <element/ui/simplemeter.hpp>
 
 #include "appinfo.hpp"
 #include "engine/midiengine.hpp"
@@ -270,10 +272,24 @@ void Settings::setDesktopScale (double scale) { set (desktopScaleKey, jlimit (0.
 
 //=============================================================================
 int Settings::getMeterColorScheme() const { return getInt (meterColorSchemeKey, 0); }
-void Settings::setMeterColorScheme (int scheme) { set (meterColorSchemeKey, jlimit (0, 1, scheme)); }
+void Settings::setMeterColorScheme (int scheme)
+{
+    set (meterColorSchemeKey, jlimit (0, 1, scheme));
+    applyMeterSettings();
+}
 
 int Settings::getBridgeLevelMode() const { return getInt (bridgeLevelModeKey, 0); }
-void Settings::setBridgeLevelMode (int mode) { set (bridgeLevelModeKey, jlimit (0, 1, mode)); }
+void Settings::setBridgeLevelMode (int mode)
+{
+    set (bridgeLevelModeKey, jlimit (0, 1, mode));
+    applyMeterSettings();
+}
+
+void Settings::applyMeterSettings() const
+{
+    SimpleMeter::setColorScheme (static_cast<SimpleMeter::ColorScheme> (getMeterColorScheme()));
+    MeterBridge::setLevelMode (static_cast<MeterBridge::LevelMode> (getBridgeLevelMode()));
+}
 
 String Settings::getMainContentType() const { return "standard"; }
 void Settings::setMainContentType (const String& tp) { ignoreUnused (tp); }
