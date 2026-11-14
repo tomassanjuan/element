@@ -45,6 +45,7 @@ public:
 
     void moved() override;
     void closeButtonPressed() override;
+    bool keyPressed (const juce::KeyPress&) override;
     void resized() override;
 
     void activeWindowStatusChanged() override;

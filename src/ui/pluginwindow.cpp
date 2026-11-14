@@ -402,4 +402,12 @@ void PluginWindow::closeButtonPressed()
     gui.closePluginWindow (this);
 }
 
+bool PluginWindow::keyPressed (const KeyPress& key)
+{
+    if (key != KeyPress::escapeKey)
+        return DocumentWindow::keyPressed (key);
+    closeButtonPressed();
+    return true;
+}
+
 } // namespace element
