@@ -761,22 +761,6 @@ void GuiService::presentPluginWindow (const Node& node, const bool focus)
 
         window->setVisible (true);
         window->toFront (focus);
-
-        if (focus)
-        {
-            // Raise again once the event that opened the window has finished.
-            MessageManager::callAsync ([sp = Component::SafePointer<PluginWindow> (window)]() {
-                if (sp == nullptr)
-                    return;
-                sp->toFront (true);
-#if JUCE_WINDOWS
-                // JUCE only calls BringWindowToTop, which does not always activate the window.
-                if (auto* peer = sp->getPeer())
-                    SetForegroundWindow ((HWND) peer->getNativeHandle());
-#endif
-                sp->grabKeyboardFocus();
-            });
-        }
     }
 }
 
