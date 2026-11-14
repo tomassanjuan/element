@@ -10,10 +10,63 @@
 #include "ui/nodeeditorfactory.hpp"
 #include <element/ui/mainwindow.hpp>
 #include "ui/windowmanager.hpp"
+#include "win32.hpp"
 
 namespace element {
 
-WindowManager::WindowManager (GuiService& g) : gui (g) {}
+#if JUCE_WINDOWS
+static WindowManager* sEscapeTarget = nullptr;
+
+// Plugin editors often hold native keyboard focus, so JUCE never sees their keys.
+static LRESULT CALLBACK escapeKeyHook (int code, WPARAM wParam, LPARAM lParam)
+{
+    const bool keyDown = (lParam & (1u << 31)) == 0;
+    if (code == HC_ACTION && wParam == VK_ESCAPE && keyDown && sEscapeTarget != nullptr
+        && sEscapeTarget->closeForegroundPluginWindow())
+        return 1;
+    return CallNextHookEx (nullptr, code, wParam, lParam);
+}
+#endif
+
+WindowManager::WindowManager (GuiService& g) : gui (g)
+{
+#if JUCE_WINDOWS
+    sEscapeTarget = this;
+    escapeHook = SetWindowsHookExW (WH_KEYBOARD, escapeKeyHook, nullptr, GetCurrentThreadId());
+#endif
+}
+
+WindowManager::~WindowManager()
+{
+#if JUCE_WINDOWS
+    if (escapeHook != nullptr)
+        UnhookWindowsHookEx ((HHOOK) escapeHook);
+    if (sEscapeTarget == this)
+        sEscapeTarget = nullptr;
+#endif
+    closeAll();
+}
+
+bool WindowManager::closeForegroundPluginWindow()
+{
+#if JUCE_WINDOWS
+    const auto fg = GetForegroundWindow();
+    for (auto* const w : activePluginWindows)
+    {
+        auto* peer = w->getPeer();
+        if (peer != nullptr && peer->getNativeHandle() == (void*) fg)
+        {
+            // Not inline: the plugin's window procedure is still on the stack.
+            MessageManager::callAsync ([sp = Component::SafePointer<PluginWindow> (w)]() {
+                if (sp != nullptr)
+                    sp->closeButtonPressed();
+            });
+            return true;
+        }
+    }
+#endif
+    return false;
+}
 
 void WindowManager::onWindowClosed (Window* c)
 {

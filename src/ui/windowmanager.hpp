@@ -17,10 +17,7 @@ class WindowManager
 {
 public:
     WindowManager (GuiService& g);
-    ~WindowManager()
-    {
-        closeAll();
-    }
+    ~WindowManager();
 
     inline void closeAll()
     {
@@ -145,6 +142,10 @@ public:
 
 private:
     GuiService& gui;
+    void* escapeHook = nullptr;
+public:
+    bool closeForegroundPluginWindow();
+private:
     OwnedArray<PluginWindow> activePluginWindows;
     OwnedArray<Window> activeWindows;
     OwnedArray<DialogWindow> activeDialogs;
