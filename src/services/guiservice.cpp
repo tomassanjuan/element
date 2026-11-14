@@ -781,10 +781,7 @@ void GuiService::run()
 
     Desktop::getInstance().setGlobalScaleFactor (
         context().settings().getDesktopScale());
-    SimpleMeter::setColorScheme (
-        static_cast<SimpleMeter::ColorScheme> (context().settings().getMeterColorScheme()));
-    MeterBridge::setLevelMode (
-        static_cast<MeterBridge::LevelMode> (context().settings().getBridgeLevelMode()));
+    settings.applyMeterSettings();
 
     mainWindow = factory->createMainWindow();
     if (mainWindow == nullptr)

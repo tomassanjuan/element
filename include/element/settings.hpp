@@ -167,6 +167,11 @@ public:
     int getMeterColorScheme() const;
     void setMeterColorScheme (int);
 
+    /** Pushes the stored meter color scheme and bridge level mode to the meters.
+
+        Called by the setters and once at startup. */
+    void applyMeterSettings() const;
+
     juce::String getMainContentType() const;
     void setMainContentType (const juce::String&);
 

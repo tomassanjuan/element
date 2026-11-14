@@ -135,6 +135,32 @@ public:
     SettingButton button;
 };
 
+class ChoiceSettingRow
+{
+public:
+    /** Adds the label and combo box to the parent and wires the change callback.
+
+        @param parent         The page that owns this row.
+        @param text           The label text.
+        @param items          The choices, in order.
+        @param selectedIndex  The initially selected choice.
+        @param onChange       Called with the chosen index after the user picks a choice.
+    */
+    void init (Component& parent, const String& text, const StringArray& items, int selectedIndex, std::function<void (int)> onChange)
+    {
+        parent.addAndMakeVisible (label);
+        label.setText (text, dontSendNotification);
+        label.setFont (Font (FontOptions (12.0, Font::bold)));
+        parent.addAndMakeVisible (box);
+        box.addItemList (items, 1);
+        box.setSelectedId (selectedIndex + 1, dontSendNotification);
+        box.onChange = [this, onChange = std::move (onChange)]() { onChange (box.getSelectedId() - 1); };
+    }
+
+    Label label;
+    ComboBox box;
+};
+
 //==============================================================================
 class SettingsPage : public Component
 {
@@ -424,7 +450,7 @@ public:
         });
         systray.init (*this, "Show system tray", settings.isSystrayEnabled(), [this]() {
             settings.setSystrayEnabled (systray.get());
-            startHiddenBox.setEnabled (systray.get());
+            startHidden.box.setEnabled (systray.get());
             closeToTray.setEnabled (systray.get());
             gui.refreshSystemTray();
             settingChanged();
@@ -441,16 +467,11 @@ public:
             gui.nodeSelected();
             settingChanged();
         });
-        addAndMakeVisible (startHiddenLabel);
-        startHiddenLabel.setText ("Start hidden in system tray", dontSendNotification);
-        startHiddenLabel.setFont (Font (FontOptions (12.0, Font::bold)));
-        addAndMakeVisible (startHiddenBox);
-        startHiddenBox.addItem ("Off", 1);
-        startHiddenBox.addItem ("Always", 2);
-        startHiddenBox.addItem ("Remember", 3);
-        startHiddenBox.setSelectedId (settings.getStartHiddenMode() + 1, dontSendNotification);
-        startHiddenBox.getSelectedIdAsValue().addListener (this);
-        startHiddenBox.setEnabled (systray.get());
+        startHidden.init (*this, "Start hidden in system tray", { "Off", "Always", "Remember" }, settings.getStartHiddenMode(), [this] (int mode) {
+            settings.setStartHiddenMode (mode);
+            settingChanged();
+        });
+        startHidden.box.setEnabled (systray.get());
         cableColors.init (*this, "Color graph cables by signal level", settings.isCableLevelColorsEnabled(), [this]() {
             settings.setCableLevelColorsEnabled (cableColors.get());
             settingChanged();
@@ -478,23 +499,14 @@ public:
             }
         };
 
-        addAndMakeVisible (meterColorsLabel);
-        meterColorsLabel.setText ("Meter colors", dontSendNotification);
-        meterColorsLabel.setFont (Font (FontOptions (12.0, Font::bold)));
-        addAndMakeVisible (meterColorsBox);
-        meterColorsBox.addItem ("Original", 1);
-        meterColorsBox.addItem ("Standard (-6 dB green, 0 yellow, over red)", 2);
-        meterColorsBox.setSelectedId (settings.getMeterColorScheme() + 1, dontSendNotification);
-        meterColorsBox.getSelectedIdAsValue().addListener (this);
-
-        addAndMakeVisible (bridgeModeLabel);
-        bridgeModeLabel.setText ("Meter bridge level", dontSendNotification);
-        bridgeModeLabel.setFont (Font (FontOptions (12.0, Font::bold)));
-        addAndMakeVisible (bridgeModeBox);
-        bridgeModeBox.addItem ("Peak (PK)", 1);
-        bridgeModeBox.addItem ("RMS (matches the channel strips)", 2);
-        bridgeModeBox.setSelectedId (settings.getBridgeLevelMode() + 1, dontSendNotification);
-        bridgeModeBox.getSelectedIdAsValue().addListener (this);
+        meterColors.init (*this, "Meter colors", { "Original", "Standard (-6 dB green, 0 yellow, over red)" }, settings.getMeterColorScheme(), [this] (int scheme) {
+            settings.setMeterColorScheme (scheme);
+            settingChanged();
+        });
+        bridgeMode.init (*this, "Meter bridge level", { "Peak (PK)", "RMS (matches the channel strips)" }, settings.getBridgeLevelMode(), [this] (int mode) {
+            settings.setBridgeLevelMode (mode);
+            settingChanged();
+        });
 
         addAndMakeVisible (defaultSessionFileLabel);
         defaultSessionFileLabel.setText ("Default new Session", dontSendNotification);
@@ -535,9 +547,6 @@ public:
         settings.removeChangeListener (this);
         clockSource.removeListener (this);
         mainContentBox.getSelectedIdAsValue().removeListener (this);
-        startHiddenBox.getSelectedIdAsValue().removeListener (this);
-        meterColorsBox.getSelectedIdAsValue().removeListener (this);
-        bridgeModeBox.getSelectedIdAsValue().removeListener (this);
     }
 
     void filenameComponentChanged (FilenameComponent* f) override
@@ -574,12 +583,12 @@ public:
         layoutSetting (r, systray);
         layoutSetting (r, closeToTray);
         layoutSetting (r, unloadInactiveGraphs);
-        layoutSetting (r, startHiddenLabel, startHiddenBox, comboWidth);
+        layoutSetting (r, startHidden.label, startHidden.box, comboWidth);
         layoutSetting (r, cableColors);
         layoutSetting (r, desktopScaleLabel, desktopScale, getWidth() / 4);
 
-        layoutSetting (r, meterColorsLabel, meterColorsBox, comboWidth);
-        layoutSetting (r, bridgeModeLabel, bridgeModeBox, comboWidth);
+        layoutSetting (r, meterColors.label, meterColors.box, comboWidth);
+        layoutSetting (r, bridgeMode.label, bridgeMode.box, comboWidth);
 
 #if ! ELEMENT_SE
         layoutSetting (r, defaultSessionFileLabel, defaultSessionFile, 190 - settingHeight);
@@ -610,21 +619,6 @@ public:
             engine->applySettings (settings);
             if (auto* cc = ViewHelpers::findContentComponent())
                 cc->refreshToolbar();
-        }
-        else if (value.refersToSameSourceAs (startHiddenBox.getSelectedIdAsValue()))
-        {
-            settings.setStartHiddenMode (startHiddenBox.getSelectedId() - 1);
-            settingChanged();
-        }
-        else if (value.refersToSameSourceAs (meterColorsBox.getSelectedIdAsValue()))
-        {
-            settings.setMeterColorScheme (meterColorsBox.getSelectedId() - 1);
-            SimpleMeter::setColorScheme (static_cast<SimpleMeter::ColorScheme> (settings.getMeterColorScheme()));
-        }
-        else if (value.refersToSameSourceAs (bridgeModeBox.getSelectedIdAsValue()))
-        {
-            settings.setBridgeLevelMode (bridgeModeBox.getSelectedId() - 1);
-            MeterBridge::setLevelMode (static_cast<MeterBridge::LevelMode> (settings.getBridgeLevelMode()));
         }
         else if (value.refersToSameSourceAs (mainContentBox.getSelectedIdAsValue()))
         {
@@ -662,8 +656,7 @@ private:
     BoolSettingRow systray;
     BoolSettingRow closeToTray;
     BoolSettingRow unloadInactiveGraphs;
-    Label startHiddenLabel;
-    ComboBox startHiddenBox;
+    ChoiceSettingRow startHidden;
     BoolSettingRow cableColors;
 
     Label desktopScaleLabel;
@@ -672,11 +665,8 @@ private:
     Label mainContentLabel;
     ComboBox mainContentBox;
 
-    Label meterColorsLabel;
-    ComboBox meterColorsBox;
-
-    Label bridgeModeLabel;
-    ComboBox bridgeModeBox;
+    ChoiceSettingRow meterColors;
+    ChoiceSettingRow bridgeMode;
 
     Settings& settings;
     AudioEnginePtr engine;
